@@ -1,0 +1,42 @@
+[submodule "Library/CommonLibSSE"]
+	path = Library/CommonLibSSE
+	url = https://github.com/Ryan-rsm-McKenzie/CommonLibSSE
+[submodule "Library/DKUtil"]
+	path = Library/DKUtil
+	url = https://github.com/gottyduke/DKUtil
+[submodule "PluginTutorialCN"]
+	path = PluginTutorialCN
+	url = https://github.com/gottyduke/PluginTutorialCN
+[submodule "Plugins/ArmorRatingRescaledRemake"]
+	path = Plugins/ArmorRatingRescaledRemake
+	url = https://github.com/gottyduke/ArmorRatingRescaledRemake
+[submodule "Plugins/BestInClassPPSSE"]
+	path = Plugins/BestInClassPPSSE
+	url = https://github.com/gottyduke/BestInClassPPSSE
+[submodule "Plugins/BunnyHopperOfSkyrim"]
+	path = Plugins/BunnyHopperOfSkyrim
+	url = https://github.com/gottyduke/BunnyHopperOfSkyrim
+[submodule "Plugins/DynamicEquipmentManagerSSE"]
+	path = Plugins/DynamicEquipmentManagerSSE
+	url = https://github.com/gottyduke/DynamicEquipmentManagerSSE
+[submodule "Plugins/EssentialsBeGoneSSE"]
+	path = Plugins/EssentialsBeGoneSSE
+	url = https://github.com/gottyduke/EssentialsBeGoneSSE
+[submodule "Plugins/GlowBeGoneSSE"]
+	path = Plugins/GlowBeGoneSSE
+	url = https://github.com/gottyduke/GlowBeGoneSSE
+[submodule "Plugins/IndividualShoutCooldownRemake"]
+	path = Plugins/IndividualShoutCooldownRemake
+	url = https://github.com/gottyduke/IndividualShoutCooldownRemake
+[submodule "Plugins/NoEnchantmentRestrictionRemake"]
+	path = Plugins/NoEnchantmentRestrictionRemake
+	url = https://github.com/gottyduke/NoEnchantmentRestrictionRemake
+[submodule "Plugins/OblivionStyleFittingRemake"]
+	path = Plugins/OblivionStyleFittingRemake
+	url = https://github.com/gottyduke/OblivionStyleFittingRemake
+[submodule "Plugins/SpeedCastingRemake"]
+	path = Plugins/SpeedCastingRemake
+	url = https://github.com/gottyduke/SpeedCastingRemake
+[submodule "Plugins/YouCanSleepRemake"]
+	path = Plugins/YouCanSleepRemake
+	url = https://github.com/gottyduke/YouCanSleepRemake
