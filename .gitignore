@@ -1,2 +1,5 @@
 
 vcpkg/
+Build/
+.vs/
+CMakeLists.txt

@@ -1,24 +1,18 @@
-[submodule "Library/CommonLibSSE"]
-	path = Library/CommonLibSSE
-	url = https://github.com/Ryan-rsm-McKenzie/CommonLibSSE
 [submodule "Library/DKUtil"]
 	path = Library/DKUtil
 	url = https://github.com/gottyduke/DKUtil
+[submodule "Library/CommonLibSSE"]
+	path = Library/CommonLibSSE
+	url = https://github.com/Ryan-rsm-McKenzie/CommonLibSSE
 [submodule "PluginTutorialCN"]
 	path = PluginTutorialCN
 	url = https://github.com/gottyduke/PluginTutorialCN
-[submodule "Plugins/ArmorRatingRescaledRemake"]
-	path = Plugins/ArmorRatingRescaledRemake
-	url = https://github.com/gottyduke/ArmorRatingRescaledRemake
 [submodule "Plugins/BestInClassPPSSE"]
 	path = Plugins/BestInClassPPSSE
 	url = https://github.com/gottyduke/BestInClassPPSSE
 [submodule "Plugins/BunnyHopperOfSkyrim"]
 	path = Plugins/BunnyHopperOfSkyrim
 	url = https://github.com/gottyduke/BunnyHopperOfSkyrim
-[submodule "Plugins/DynamicEquipmentManagerSSE"]
-	path = Plugins/DynamicEquipmentManagerSSE
-	url = https://github.com/gottyduke/DynamicEquipmentManagerSSE
 [submodule "Plugins/EssentialsBeGoneSSE"]
 	path = Plugins/EssentialsBeGoneSSE
 	url = https://github.com/gottyduke/EssentialsBeGoneSSE
