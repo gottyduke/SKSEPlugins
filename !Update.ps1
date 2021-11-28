@@ -43,7 +43,7 @@ $a_pch = $args[4]
 # project path
 $Folder = $PSScriptRoot | Split-Path -Leaf
 
-Write-Host "`n`t<$Folder> [$a_mode] BEGIN"
+Write-Host "`n`t<$Folder> [$a_mode] BEGIN`n"
 if ($a_mode -eq "COPY") { # post build copy event
     $GameBase
     $MO2Base
