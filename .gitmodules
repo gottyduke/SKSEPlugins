@@ -37,3 +37,6 @@
 [submodule "Plugins/ArmorRatingRescaledRemake"]
 	path = Plugins/ArmorRatingRescaledRemake
 	url = https://github.com/gottyduke/ArmorRatingRescaledRemake
+[submodule "Plugins/Template"]
+	path = Plugins/Template
+	url = https://github.com/gottyduke/Template
