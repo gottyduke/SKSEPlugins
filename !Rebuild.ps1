@@ -1,19 +1,29 @@
 $ErrorActionPreference = 'Stop'
 
-# clean build folder
-Write-Host "`tCleaning build folder..."
-Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction Ignore
-
 # generate CMakeLists.txt
 $Header = "cmake_minimum_required(VERSION 3.21) `n`nset(LINKAGE_OVERRIDE "
 
 if ($args[0] -eq "MT") {
 	Write-Host "`t***** Building Static MultiThreaded *****`n`tvcpkg : x64-windows-static" -ForegroundColor DarkGreen
 	$Header = $Header + "false)`n`n"
-} else {
+} elseif ($args[0] -eq "MD") {
 	Write-Host "`t***** Building Runtime MultiThreadedDLL *****`n`tvcpkg : x64-windows-static-md" -ForegroundColor Red
 	$Header = $Header + "true)`n`n"
+} else { # trigger zero_check
+	if (-Not (Test-Path 'CMakeLists.txt' -PathType Leaf)) {
+		Write-Host "`tRun !Rebuild in MT or MD mode first." -ForegroundColor Red
+		Exit
+	}
+
+	$file = [IO.File]::ReadAllText('CMakeLists.txt')
+	[IO.File]::WriteAllLines('CMakeLists.txt', $file)
+	Write-Host "`t++ ZERO_CHECK ++"
+	Exit
 }
+
+# clean build folder
+Write-Host "`tCleaning build folder..."
+Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction Ignore
 
 $CMakeLists = $Header + @'
 set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
@@ -81,7 +91,7 @@ foreach($workSet in $WorkSpaceDir) {
 }
 
 $CMakeLists = (Get-Date -UFormat "# Auto generated @ %R %B %d`n") + $CMakeLists
-[IO.File]::WriteAllText("CMakeLists.txt", $CMakeLists)
+[IO.File]::WriteAllText('CMakeLists.txt', $CMakeLists)
 
 # cmake
 Write-Host "`tExecuting CMake..." -ForegroundColor Yellow

@@ -40,13 +40,15 @@ $a_path = $args[2]
 $a_project = $args[3]
 $a_pch = $args[4]
 
+$GameBase
+$MO2Base
+
 # project path
 $Folder = $PSScriptRoot | Split-Path -Leaf
 
+# operation
 Write-Host "`n`t<$Folder> [$a_mode] BEGIN`n"
 if ($a_mode -eq "COPY") { # post build copy event
-    $GameBase
-    $MO2Base
     
     [System.IO.File]::ReadLines("$a_pch") | ForEach-Object {
         if ($_ -eq "#define ANNIVERSARY_EDITION true") {
@@ -59,7 +61,7 @@ if ($a_mode -eq "COPY") { # post build copy event
     }
 
     $MO2Base = "$GameBase/MO2/mods/$a_project"
-
+    
     # binary
     Write-Host "`tCopying binary file..."
     New-Item -Type dir "$MO2Base/SKSE/Plugins" -Force | Out-Null
@@ -116,7 +118,7 @@ if ($a_mode -eq "COPY") { # post build copy event
 
     if ($a_version) {
         # update vcpkg.json accordinly
-        $vcpkg = [System.IO.File]::ReadAllText("$PSScriptRoot/vcpkg.json") | ConvertFrom-Json
+        $vcpkg = [IO.File]::ReadAllText("$PSScriptRoot/vcpkg.json") | ConvertFrom-Json
         $vcpkg.'version-string' = $a_version
         $vcpkg = $vcpkg | ConvertTo-Json
         [IO.File]::WriteAllText("$PSScriptRoot/vcpkg.json", $vcpkg) # damn you encoding
