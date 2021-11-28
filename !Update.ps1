@@ -50,10 +50,10 @@ $Folder = $PSScriptRoot | Split-Path -Leaf
 Write-Host "`n`t<$Folder> [$a_mode] BEGIN`n"
 if ($a_mode -eq 'COPY') { # post build copy event
     
-    if ($a_isAE) {
+    if ($a_isAE -eq 'TRUE') {
         $GameBase = $env:SkyrimAEPath
         Write-Host "`tCurrent $Folder $a_version | ANNIVERSARY EDITION"
-    } else {
+    } elseif ($a_isAE -eq 'FALSE') {
         $GameBase = $env:SkyrimSEPath
         Write-Host "`tCurrent $Folder $a_version | SPECIAL EDITION"
     }
