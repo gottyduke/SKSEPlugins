@@ -34,3 +34,6 @@
 [submodule "Plugins/YouCanSleepRemake"]
 	path = Plugins/YouCanSleepRemake
 	url = https://github.com/gottyduke/YouCanSleepRemake
+[submodule "Plugins/ArmorRatingRescaledRemake"]
+	path = Plugins/ArmorRatingRescaledRemake
+	url = https://github.com/gottyduke/ArmorRatingRescaledRemake
