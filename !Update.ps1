@@ -38,7 +38,7 @@ $a_mode = $args[0] ## COPY SOURCEGEN DISTRIBUTE
 $a_version = $args[1]
 $a_path = $args[2]
 $a_project = $args[3]
-$a_pch = $args[4]
+$a_isAE = $args[4]
 
 $GameBase
 $MO2Base
@@ -48,16 +48,14 @@ $Folder = $PSScriptRoot | Split-Path -Leaf
 
 # operation
 Write-Host "`n`t<$Folder> [$a_mode] BEGIN`n"
-if ($a_mode -eq "COPY") { # post build copy event
+if ($a_mode -eq 'COPY') { # post build copy event
     
-    [System.IO.File]::ReadLines("$a_pch") | ForEach-Object {
-        if ($_ -eq "#define ANNIVERSARY_EDITION true") {
-            Write-Host "`tCurrent $Folder $a_version | ANNIVERSARY EDITION"
-            $GameBase = $env:SkyrimAEPath
-        } elseif ($_ -eq "#define ANNIVERSARY_EDITION false") {
-            Write-Host "`tCurrent $Folder $a_version | SPECIAL EDITION"
-            $GameBase = $env:SkyrimSEPath
-        }
+    if ($a_isAE) {
+        $GameBase = $env:SkyrimAEPath
+        Write-Host "`tCurrent $Folder $a_version | ANNIVERSARY EDITION"
+    } else {
+        $GameBase = $env:SkyrimSEPath
+        Write-Host "`tCurrent $Folder $a_version | SPECIAL EDITION"
     }
 
     $MO2Base = "$GameBase/MO2/mods/$a_project"
@@ -104,11 +102,11 @@ if ($a_mode -eq "COPY") { # post build copy event
         Copy-Item "$PSScriptRoot/Interface" "$MO2Base" -Recurse -Force
         Write-Host "`tDone!"
     }
-} elseif ($a_mode -eq "SOURCEGEN") { # cmake sourcelist generation
+} elseif ($a_mode -eq 'SOURCEGEN') { # cmake sourcelist generation
     Write-Host "`tGenerating CMake sourcelist..."
     Remove-Item "$a_path/sourcelist.cmake" -Force -Confirm:$false -ErrorAction Ignore
 
-    $generated = "set(SOURCES" 
+    $generated = 'set(SOURCES'
     $generated += $PSScriptRoot | Walk-Files
     if ($a_path) {
         $generated += $a_path | Walk-Files
@@ -124,10 +122,10 @@ if ($a_mode -eq "COPY") { # post build copy event
         [IO.File]::WriteAllText("$PSScriptRoot/vcpkg.json", $vcpkg) # damn you encoding
     }
 } elseif ($a_mode -eq 'DISTRIBUTE') { # update script to every project
-    ((Get-ChildItem "Plugins" -Directory -Recurse) + (Get-ChildItem "Library" -Directory -Recurse)) | Resolve-Path -Relative | ForEach-Object {
+    ((Get-ChildItem 'Plugins' -Directory -Recurse) + (Get-ChildItem 'Library' -Directory -Recurse)) | Resolve-Path -Relative | ForEach-Object {
         if (Test-Path "$_/CMakeLists.txt" -PathType Leaf) {
             Write-Host "`tUpdated <$_>"
-            Robocopy.exe "." "$_" "!Update.ps1" /MT /NJS /NFL /NDL /NJH
+            Robocopy.exe '.' "$_" '!Update.ps1' /MT /NJS /NFL /NDL /NJH
         }
     }
 }

@@ -3,3 +3,4 @@ vcpkg/
 Build/
 .vs/
 CMakeLists.txt
+ATASignature.ps1

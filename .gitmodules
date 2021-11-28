@@ -40,6 +40,3 @@
 [submodule "Library/CommonLibSSE"]
 	path = Library/CommonLibSSE
 	url = https://github.com/Ryan-rsm-McKenzie/CommonLibSSE
-[submodule "Library/CommonLibSSE-Latest"]
-	path = Library/CommonLibSSE-Latest
-	url = https://github.com/Ryan-rsm-McKenzie/CommonLibSSE
