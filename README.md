@@ -18,7 +18,7 @@ Env Variable | Value
 
 ## Build
 Execute the script `.\!Rebuild.ps1` to generate `CMakeLists.txt` for the entire solution.  
-![MTD](https://github.com/gottyduke/PluginTutorialCN/blob/1579c5fa222e57bedce355835016fcd3405b4a91/images/MT.png)  
-By default this script generates `MultiThreadedDLL` configuration, use `MT` parameter to build `MultiThreaded` configuration.
+![MTD](https://github.com/gottyduke/PluginTutorialCN/blob/1579c5fa222e57bedce355835016fcd3405b4a91/images/MTD.png)  
+By default this script generates `MultiThreadedDLL` configuration, use `MT` parameter to build `MultiThreaded` configuration.  
 ![MT](https://github.com/gottyduke/PluginTutorialCN/blob/1579c5fa222e57bedce355835016fcd3405b4a91/images/MT.png)   
 The result solution file is located in the `/Build` folder.
