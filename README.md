@@ -12,13 +12,24 @@ Env Variable | Value
 --- | ---
 `SkyrimSEPath` | Skyrim Special Edition full installation path on the local environment.
 `SkyrimAEPath` | Skyrim Anniversary Edition full installation path on the local environment if there's any.
-`CommonLibSSEPath` | [CommonLibSSE](https://github.com/Ryan-rsm-McKenzie/CommonLibSSE) full path to the local repo of the latest CommonLibSSE. Presumably `ThisRepoPath/Library/CommonLibSSE`.
-`DKUtilPath` | [DKUtil](https://github.com/gottyduke/DKUtil) full path to the local repo of the latest DKUtil. Presumably `ThisRepoPath/Library/DKUtil`.
-`VCPKG_ROOT` | [vcpkg](https://github.com/microsoft/vcpkg) full path on the local environment after it's built.
+
 
 ## Build
-Execute the script `.\!Rebuild.ps1` to generate `CMakeLists.txt` for the entire solution.  
-![MTD](https://github.com/gottyduke/PluginTutorialCN/blob/1579c5fa222e57bedce355835016fcd3405b4a91/images/MTD.png)  
-By default this script generates `MultiThreadedDLL` configuration, use `MT` parameter to build `MultiThreaded` configuration.  
-![MT](https://github.com/gottyduke/PluginTutorialCN/blob/1579c5fa222e57bedce355835016fcd3405b4a91/images/MT.png)   
-The result solution file is located in the `/Build` folder.
+Execute the command `.\!Rebuild MT AE` to generate solution for `Anniversary Edition` with `MultiThreaded` config.  
+The result solution file is located in the `Build` folder.
+
+### PostBuild Event
+The postbuild event will attempt to copy the product binary file to MO2 directory, which is expected to be in the game root folder with the name `MO2`.
+```
+SkyrimSEPath | SkyrimAEPath
+    Data
+    MO2
+        downloads
+        mods
+        override
+        profiles
+        webcache
+
+    skse64_loader.exe
+    SkyrimSE.exe
+```
