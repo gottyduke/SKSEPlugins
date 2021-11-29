@@ -1,30 +1,51 @@
+# args
+param (
+    [Parameter(Mandatory)][string]$Name,
+    [Parameter(Mandatory)][ValidateSet('P', 'L')][char]$Type,
+    [string]$Destination,
+    [string]$Description,
+    [string[]]$AddDependencies
+)
+
 $ErrorActionPreference = "Stop"
 
-# args
-$a_name = $args[0]
-$a_type = $args[1]
-
+# templates
 $Template = "$PSScriptRoot/Plugins/Template"
-$Path
+$Path = ""
+$Json = @'
+{
+    "name":  "",
+    "version-string":  "1.0.0",
+    "description":  "",
+    "license":  "MIT",
+    "dependencies":  [
+                         "spdlog"
+                     ],
+    "script-version": "",
+    "build-config": "",
+    "build-target": "",
+    "install-name": ""
+}
+'@ | ConvertFrom-Json
 
 # checks
-if ($a_type -eq 'P') {
+if ($Type -eq 'P') {
     $Path = "$PSScriptRoot/Plugins"
-} elseif ($a_type -eq 'L') {
+} elseif ($Type -eq 'L') {
     $Path = "$PSScriptRoot/Library"
 } else {
     Write-Host "`tUnknown argument." -ForegroundColor Red
     Exit
 }
 
-if (Test-Path "$Path/$a_name" -PathType Container) {
+if (Test-Path "$Path/$Name" -PathType Container) {
     Write-Host "`tFolder with same name exists. Aborting." -ForegroundColor Red
     Exit
 }
 
 New-Item -Type dir $Path -Force | Out-Null
 
-# template
+# update
 if (Test-Path "$Template/CMakeLists.txt" -PathType Leaf) {
     Write-Host "`tFound Template project!" -ForegroundColor Green
 } else {
@@ -34,28 +55,39 @@ if (Test-Path "$Template/CMakeLists.txt" -PathType Leaf) {
 }
 
 # populate
-Copy-Item -Path "$Template/cmake" -Destination "$Path/$a_name/cmake" -Recurse
-Copy-Item -Path "$Template/src" -Destination "$Path/$a_name/src" -Recurse
-Copy-Item "$Template/CMakeLists.txt" -Destination "$Path/$a_name/CMakeLists.txt"
+Copy-Item -Path "$Template/cmake" -Destination "$Path/$Name/cmake" -Recurse
+Copy-Item -Path "$Template/src" -Destination "$Path/$Name/src" -Recurse
+Copy-Item "$Template/CMakeLists.txt" -Destination "$Path/$Name/CMakeLists.txt"
 
 # CMakeLists.txt
-$cmake = [IO.File]::ReadAllLines("$Path/$a_name/CMakeLists.txt")
-$cmake[4] = "`t$a_name"
-[IO.File]::WriteAllLines("$Path/$a_name/CMakeLists.txt", $cmake)
+$cmake = [IO.File]::ReadAllLines("$Path/$Name/CMakeLists.txt")
+$cmake[4] = "`t$Name"
+[IO.File]::WriteAllLines("$Path/$Name/CMakeLists.txt", $cmake)
 
-# update vcpkg.json accordinly
-$vcpkg = [IO.File]::ReadAllText("$Template/vcpkg.json") | ConvertFrom-Json
-$vcpkg.'name' = $a_name
-$vcpkg.'description' = "Placeholding description"
-$vcpkg = $vcpkg | ConvertTo-Json
-[IO.File]::WriteAllText("$Path/$a_name/vcpkg.json", $vcpkg)
+# generate vspkg.json
+$Json.'name' = $Name
+if ($Description) {
+    $Json.'description' = $Description
+}
+if ($AddDependencies) {
+    $Json.'dependencies' = $AddDependencies
+}
+if ($Destination) {
+    $Json.'install-name' = $Destination
+} else {
+    $Json.'install-name' = $Name
+}
 
-Write-Host "`tNew project <$a_name> generated." -ForegroundColor Green
+$Json = $Json | ConvertTo-Json
+[IO.File]::WriteAllText("$Path/$Name/vcpkg.json", $Json)
+
+Write-Host "`tNew project <$Name> generated." -ForegroundColor Green
+
 # SIG # Begin signature block
 # MIIR2wYJKoZIhvcNAQcCoIIRzDCCEcgCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUSTNVkypdGfzTzjPjQ0vMAfuM
-# sTSggg1BMIIDBjCCAe6gAwIBAgIQNkaQTCtrQ7NPmyNqlKMtlDANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU5+B/GFyZvzhArrFn4Ldgw0SM
+# 1GSggg1BMIIDBjCCAe6gAwIBAgIQNkaQTCtrQ7NPmyNqlKMtlDANBgkqhkiG9w0B
 # AQsFADAbMRkwFwYDVQQDDBBBVEEgQXV0aGVudGljb2RlMB4XDTIxMTEyODE1MTMy
 # N1oXDTIyMTEyODE1MzMyN1owGzEZMBcGA1UEAwwQQVRBIEF1dGhlbnRpY29kZTCC
 # ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANoBGMeVEUQXzEw352NicaE9
@@ -129,23 +161,23 @@ Write-Host "`tNew project <$a_name> generated." -ForegroundColor Green
 # AQEwLzAbMRkwFwYDVQQDDBBBVEEgQXV0aGVudGljb2RlAhA2RpBMK2tDs0+bI2qU
 # oy2UMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqG
 # SIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3
-# AgEVMCMGCSqGSIb3DQEJBDEWBBS+AN9p8yQIPqXvJB5NDhSHtyar5jANBgkqhkiG
-# 9w0BAQEFAASCAQBjsmxye1rsocStibfU3P6NED/X3OAk0vktipsR0upuvtZL5rgp
-# HgU6yg12xuQqM+CHo7THaMB7cUkZIE+LFwHI4SJ/xEwbUuXkp4BhwAcgfIjdtdym
-# Spr9Dt1goHj2wmdEBGmXvhqkHlrWhXr9izGWYCHJl97nRPjg/MmmjIWqol1ULdh2
-# k2RpzEb7zlv9oZUsWMA66ONGas/godx2zIt6OAu+aNR5iEWQ+zaXqk1DSGpZRqho
-# WK8c/Z1M+kA5FlaJoSZMe+cpL+WReNCRIslnMEQM+bGT1j1ScTjSYTSVMqdaOs0M
-# S8n9PCGq9DpqJjnW2l21zW5XJBWr2VHGG1GMoYICMDCCAiwGCSqGSIb3DQEJBjGC
+# AgEVMCMGCSqGSIb3DQEJBDEWBBTZrxiiMPKuk3mAualY+Ep43gOqtjANBgkqhkiG
+# 9w0BAQEFAASCAQBgllUOaBq4qSMDfWs7P14BEYNTuU2vY/1ars4hdmKuUx42BkSr
+# T737sJz17VstiqhjPm6El08PI5KlH7Drl7bOmwk0+3cdYYwI6Cx2CKAB+uAFKOH/
+# jQHXL4abqVE2umB+yC9GCxo+H1rXVDjZaxD+/rAeLVOyvhasvtDlY4FoiFHQDXhP
+# nzumMu86lIpoOi8aBeADKg+XpOWAHwO/leO+DIrgcm2N6xChOc2WQz0rMuFJOcjp
+# tcIF+sui+IpHivNP78kZjsUeqn0AnX3X0EzbfuuP1au/4JmS9Nk8GLAhCwfRFF/p
+# M1O5z6jBQvOvNCB6hm+qWtW3wCUEQI8r3FwaoYICMDCCAiwGCSqGSIb3DQEJBjGC
 # Ah0wggIZAgEBMIGGMHIxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJ
 # bmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0
 # IFNIQTIgQXNzdXJlZCBJRCBUaW1lc3RhbXBpbmcgQ0ECEA1CSuC+Ooj/YEAhzhQA
 # 8N0wDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwG
-# CSqGSIb3DQEJBTEPFw0yMTExMjgxNjA3MjFaMC8GCSqGSIb3DQEJBDEiBCCXQq52
-# 3+H4elwSpYqFG8a6vvU1RFn6HIAiCqvM4TngsjANBgkqhkiG9w0BAQEFAASCAQCO
-# +TGSaThwbEkkYNjYtBxBj72ENciI9rKGqjz9Q/aGQd0lHhEC4QjygMQgg2IiGW9R
-# l14O1jmHMXxISWh5AbHeqbocoVMGQn1JE4UohoCeSQFvbjN/VCrt6F6fZyNM/l72
-# qarPgQzY7iVdWBIV0B5KQ6h9945kmnnvpgs+uL7wdOGPAt0bFZuIqjFP+K3magzj
-# 4cIVwo4eMEADNztjfPHslvIaEOgXDtKdPBhMmUFTyKuj4eaOyu5AUEkWoLHZb3o6
-# uUWms3iDcMcGjmTTSyBNAx0RB+j3ib6rzDvzg9DeG6L2r/SRAI/GGsNNTurNTa4F
-# eIl5M6NvZH13gS75MBJE
+# CSqGSIb3DQEJBTEPFw0yMTExMjkxMzA1MzZaMC8GCSqGSIb3DQEJBDEiBCCjDKiN
+# Kv2r3Jtyf11KOJuUcOrLQ52awZ9tjAklMDEprDANBgkqhkiG9w0BAQEFAASCAQBk
+# ULcF3O6xaSgOgGnJTFZVYip+95HthYL6d3lr5szDql3AcSCfOo26QucDmcYaM+Q8
+# dVqMofHnt0JkSnf9DOcU17aRZ85gzfuWBTlnB75YBSicWzBxxCWN5y1pIklxSdgi
+# OVgKcZ+mI0mKXSX+STLYea33XlMmP5N2LcrpFincbyqch0JvvxSO2BsLGy6iBrtN
+# +yf2HJ5jK3qaIiJF9+4k46qZQnS1EJTZMw5asCoCYliYulKV3V74yCq7fqhVG3uV
+# efIqHMQmf6I/oW21Pr1eiY2tyLHNe+EuWrA5pTPLRbSeMI69nG1n7Mi7d2OCAWPX
+# 1TBHf9AKaRRTdu0PNBTj
 # SIG # End signature block

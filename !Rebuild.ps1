@@ -1,54 +1,19 @@
+# args
+param(
+	[string]$Mode0,
+	[string]$Mode1,
+	[string]$CustomCLib
+)
+
+$env:DKScriptVersion = '11129'
+$env:BuildConfig = $Mode0
+$env:BuildTarget = $Mode1
+
 $ErrorActionPreference = 'Stop'
 
 $Header = (Get-Date -UFormat "# Auto generated @ %R %B %d`n") + "cmake_minimum_required(VERSION 3.19) `n`nset(LINKAGE_OVERRIDE "
-$CMakeLists
 $isAE
-
-# build configuration
-if ($args[0] -eq 'MT') {
-	$Header = $Header + "FALSE CACHE BOOL `"`")`n"
-	Write-Host "`t***** Building Static MultiThreaded *****`n`tvcpkg : x64-windows-static" -ForegroundColor DarkGreen
-} elseif ($args[0] -eq 'MD') {
-	$Header = $Header + "TRUE CACHE BOOL `"`")`n"
-	Write-Host "`t***** Building Runtime MultiThreadedDLL *****`n`tvcpkg : x64-windows-static-md" -ForegroundColor Red
-} else { # trigger zero_check
-	if (-Not (Test-Path "$PSScriptRoot/CMakeLists.txt" -PathType Leaf)) {
-		Write-Host "`tRun !Rebuild in MT or MD mode first." -ForegroundColor Red
-		Exit
-	}
-
-	$file = [IO.File]::ReadAllText("$PSScriptRoot/CMakeLists.txt")
-	[IO.File]::WriteAllLines("$PSScriptRoot/CMakeLists.txt", $file)
-	Write-Host "`t++ ZERO_CHECK ++"
-	Exit
-}
-
-# build target
-Push-Location $env:CommonLibSSEPath
-if ($args[1] -eq 'AE') {
-	Write-Host "`tTarget: Anniversary Edition" -ForegroundColor Yellow
-	& git checkout -f master -q
-	$isAE = 'TRUE'
-} elseif ($args[1] -eq 'SE') {
-	Write-Host "`tTarget: Special Edition" -ForegroundColor Blue
-	& git checkout -f 575f84a -q
-	$isAE = 'FALSE'
-} else {
-	Write-Host "`tUnknown game version specified!" -ForegroundColor Red
-	Pop-Location
-	Exit
-}
-Pop-Location
-$Header = $Header + "set(ANNIVERSARY_EDITION $isAE CACHE BOOL `"`")`n`n"
-
-# clean build folder
-Write-Host "`tCleaning build folder..."
-Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction Ignore
-
-# generate CMakeLists.txt
-$Header = 
-
-$CMakeLists = $Header + @'
+$Boiler = @'
 set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE STRING "")
 
 if (LINKAGE_OVERRIDE)
@@ -89,39 +54,107 @@ if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
 	)
 endif()
 
-# use custom CMakeLists for CommonLibSSE
+'@
+$Trail = "`n`nset(GROUP CLib)`n"
+$CMakeLists
+
+# build configuration
+if ($Mode0 -eq 'MT') {
+	$Header = $Header + "FALSE CACHE BOOL `"`")`n"
+	Write-Host "`t***** Building Static MultiThreaded *****`n`tvcpkg : x64-windows-static" -ForegroundColor DarkGreen
+} elseif ($Mode0 -eq 'MD') {
+	$Header = $Header + "TRUE CACHE BOOL `"`")`n"
+	Write-Host "`t***** Building Runtime MultiThreadedDLL *****`n`tvcpkg : x64-windows-static-md" -ForegroundColor Red
+} else { # trigger zero_check
+	if (-not (Test-Path "$PSScriptRoot/CMakeLists.txt" -PathType Leaf)) {
+		Write-Host "`tRun !Rebuild in MT or MD mode first." -ForegroundColor Red
+		Exit
+	}
+
+	$file = [IO.File]::ReadAllText("$PSScriptRoot/CMakeLists.txt")
+	[IO.File]::WriteAllLines("$PSScriptRoot/CMakeLists.txt", $file)
+	Write-Host "`t++ ZERO_CHECK ++"
+	Exit
+}
+
+# build target
+if ($Mode1 -eq 'AE') {
+	Write-Host "`tTarget: Anniversary Edition" -ForegroundColor Yellow
+	$isAE = 'TRUE'
+} elseif ($Mode1 -eq 'SE') {
+	Write-Host "`tTarget: Special Edition" -ForegroundColor Blue
+	$isAE = 'FALSE'
+} else {
+	Write-Host "`tUnknown game version specified!" -ForegroundColor Red
+	Pop-Location
+	Exit
+}
+
+# clib integration
+$Resolved = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath($CustomCLib)
+if ($CustomCLib -and (Test-Path "$Resolved/CMakeLists.txt" -PathType Leaf)) { # manual assign path
+	Write-Host "`t==> Rebasing custom CLib <==" -ForegroundColor Red
+	$env:CommonLibSSEPath = $Resolved
+	$Resolved = (Resolve-Path $Resolved -Relative) + " $PSScriptRoot/Build/Clib" -replace '\\', '/'
+	$Trail = $Trail + "add_subdirectory($Resolved)`n`n"
+} elseif ($CustomCLib -eq '0') { # default env flag
+	Write-Host "`t==> Rebasing custom CLib <==" -ForegroundColor Red
+	$Resolved = (Resolve-Path $env:CommonLibSSEPath -Relative) + " $PSScriptRoot/Build/Clib" -replace '\\', '/'
+	$Trail = $Trail + "add_subdirectory($Resolved)`n`n"
+} else {
+	Push-Location $env:CommonLibSSEPath
+	if ($Mode1 -eq 'AE') {
+		Write-Host "`t==> Rebasing latest CLib <==" -ForegroundColor Green
+		& git checkout -f master -q
+	} elseif ($Mode1 -eq 'SE') {
+		Write-Host "`t==> Rebasing legacy CLib <==" -ForegroundColor Green
+		& git checkout -f 575f84a -q
+	}
+	Pop-Location	
+	
+	# use custom CMakeLists for CommonLibSSE
+	$Trail = $Trail + @'
+
 configure_file(
 	${CMAKE_CURRENT_SOURCE_DIR}/Library/ClibCustomCMakeLists.txt.in
-	${CMAKE_CURRENT_SOURCE_DIR}/Library/CommonLibSSE/CMakeLists.txt
+	$ENV{CommonLibSSEPath}/CMakeLists.txt
 	COPYONLY
 )
 
-'@
+add_subdirectory($ENV{CommonLibSSEPath})
 
-# for managing all my plugins
+'@
+}
+$Header = $Header + "set(ANNIVERSARY_EDITION $isAE CACHE BOOL `"`")`n`n"
+
+# clean build folder
+Write-Host "`tCleaning build folder..."
+Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction Ignore
+
+# manage all sub projects
 Write-Host "`tGenerating CMakeLists.txt for projects below:"
-$WorkSpaceDir = @('Library', 'Plugins')
-foreach($workSet in $WorkSpaceDir) {
-	$CMakeLists = $CMakeLists + "`nset(GROUP $workSet)`n"
-	Get-ChildItem $workSet -Directory -Recurse -ErrorAction SilentlyContinue | Resolve-Path -Relative | ForEach-Object {
+@('Library', 'Plugins') | ForEach-Object {
+	$Trail = $Trail + "`nset(GROUP $_)`n"
+	Get-ChildItem $_ -Directory -Exclude 'CommonLibSSE' -Recurse -ErrorAction SilentlyContinue | Resolve-Path -Relative | ForEach-Object {
 		if (Test-Path "$PSScriptRoot/$_/CMakeLists.txt" -PathType Leaf) {
 			$projectDir = $_.Substring(2) -replace '\\', '/'
 			Write-Host "`t`t$projectDir" -ForegroundColor Cyan
-			$CMakeLists = $CMakeLists + "`nadd_subdirectory(`"$projectDir`")`n"
+			$Trail = $Trail + "add_subdirectory(`"$projectDir`")`n"
 		}
 	}
 }
 
+$CMakeLists = $Header + $Boiler +$Trail
 [IO.File]::WriteAllText("$PSScriptRoot/CMakeLists.txt", $CMakeLists)
 
 # cmake
 Write-Host "`tExecuting CMake..." -ForegroundColor Yellow
-& cmake.exe -B $PSScriptRoot\Build -S $PSScriptRoot
+& cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot
 # SIG # Begin signature block
 # MIIR2wYJKoZIhvcNAQcCoIIRzDCCEcgCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUctA8jqkwBRe016sSZHRJ6nGb
-# vx6ggg1BMIIDBjCCAe6gAwIBAgIQNkaQTCtrQ7NPmyNqlKMtlDANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUnhLo5xB6j5FsTHKqdrVWb+/H
+# U5Gggg1BMIIDBjCCAe6gAwIBAgIQNkaQTCtrQ7NPmyNqlKMtlDANBgkqhkiG9w0B
 # AQsFADAbMRkwFwYDVQQDDBBBVEEgQXV0aGVudGljb2RlMB4XDTIxMTEyODE1MTMy
 # N1oXDTIyMTEyODE1MzMyN1owGzEZMBcGA1UEAwwQQVRBIEF1dGhlbnRpY29kZTCC
 # ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANoBGMeVEUQXzEw352NicaE9
@@ -195,23 +228,23 @@ Write-Host "`tExecuting CMake..." -ForegroundColor Yellow
 # AQEwLzAbMRkwFwYDVQQDDBBBVEEgQXV0aGVudGljb2RlAhA2RpBMK2tDs0+bI2qU
 # oy2UMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqG
 # SIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3
-# AgEVMCMGCSqGSIb3DQEJBDEWBBRCklo0p/Trwti1Y7cazrUYVAm3azANBgkqhkiG
-# 9w0BAQEFAASCAQC7iDOvGv4CyolvPXuUMX2Hqc7Qh80ueZmmZ9sEivEKNJRDqbHG
-# UyaOEFB3/r6vfzwZZ/IcY7yr9sLw/UjRNP83bDbKj2zo/AuxTHe9mi8QMrD8Ki+c
-# DmV8x5yHeKRGjjUA3qASAAbFTb/pkYvI+WykGWptIx/UEAGuGXrBndKP188JD67o
-# uDrBK876ywDYXq+BgKg1jgp0uazfnueGRHDr2z2OZgh0NWMp7B5w7FuznQnzOWwo
-# 6rpBhgTYLEVVjbYzOVHrUsKmh19OZRgEoDtbI8lWqYanehi9ZR512qQ6fcyvXGSU
-# Gjch4ZQkWpHB5vNE8V6Lp/IPnAanTSNdd3mtoYICMDCCAiwGCSqGSIb3DQEJBjGC
+# AgEVMCMGCSqGSIb3DQEJBDEWBBQOEh/oCot1Fr+2jXPxvU8SEiYKbzANBgkqhkiG
+# 9w0BAQEFAASCAQAJ09IECKTiUec6SMNlNzGMvI8QEpvdk1Wu9nmm+W/VodzeT3Qu
+# SzLlxaL1te0Nv0i3F6rCiVgjkThCPe8iS6ztAj51nJJuYlrzqVKzJ+CdWXCIUfyG
+# BQm8RXU9cuG3Uk/REZ+mfQu6khFH63hkmEZDKxKTEZl8fzLe8DP75SqWNkaGuG7s
+# KlM3EVIBn3rbbNBuvlsbyU+p6lJWf53555WhXOqX1j4m3nW9EcpYl/CTNetGhafe
+# iVJHGyqVIRCy+zO0jofMELam4DkYijIkcan37XK00BxrapTH6P3KWBMaUwISlnkq
+# X8wBK7nR1dkgM4Cs3qo9rKINezMJR+5NsA7MoYICMDCCAiwGCSqGSIb3DQEJBjGC
 # Ah0wggIZAgEBMIGGMHIxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJ
 # bmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0
 # IFNIQTIgQXNzdXJlZCBJRCBUaW1lc3RhbXBpbmcgQ0ECEA1CSuC+Ooj/YEAhzhQA
 # 8N0wDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwG
-# CSqGSIb3DQEJBTEPFw0yMTExMjgxNjA1NTdaMC8GCSqGSIb3DQEJBDEiBCCn63tV
-# nFiJ97poC2cVC/0Kj+dWDWhzkiP6yMGKIz1gZzANBgkqhkiG9w0BAQEFAASCAQCV
-# h4dTbfZwBB1bcfy4ldnwNrjUuubF2Y3KnkkdxoYVCPY2bNyYnl+e9Igwg5PdO9kG
-# AxSpMdD/CJAZ5AtH8M9HxCsM7POqeSxgpPngy0JHVsqpf7onolv4iglu2vyKJxPH
-# PnHwTDxJ1yT51m9lryYVecf1GORX4jXeVhB+jNOC96Sa3GfH54uf3NpxGstV4zfh
-# 1GS0eQaHE78OVINWHrnA7Cr+zD8NaknjAr45o6GfYBVZ3rq4OR5acqbVpVwzXxKF
-# OuEOMOCAAckvJapqnFXKJ7fQ3A6jHPfwTt2OiGtBZqtkUmO8XnB0bAumBkErykrp
-# 3c6c/90jUES5cCMiwgHF
+# CSqGSIb3DQEJBTEPFw0yMTExMjkxMjM5NTBaMC8GCSqGSIb3DQEJBDEiBCCJsjh/
+# yiEqKTtscAVXFwSVNE0UoO0Svb/mUX3EbgmVczANBgkqhkiG9w0BAQEFAASCAQCK
+# LdoS+nWXrhMUgi3UtluP3FVrI0jHMZ/gRdJtcuG/kwoBMLJ9WfX/WiShMH18AlBm
+# DAdsmoJYfAnYB99mKbdSqwOfCx+LoMtk6/vWGg7PZ6O4TK9OopaZ9gG67vUX0HNH
+# +V5cdcYWgy4UFwgVIeFXnLDV+bU9SxT0Vj4lOTu9mGRymv8c9e1jQFYB/VG3RLWI
+# ml4pc8G18SwHAkq8uyh4byx++lipIYzokZVSDt8L4gnNi3Kb+r5m2fp7XW73McT+
+# Isp+sxFrzbETe6VNx8FGpEaMVGtLDE/CfvMu6CTPIh3a5p0hPcw0Vl7cRvCnkZJQ
+# zSDmCVHn5HafoPYPaVVo
 # SIG # End signature block

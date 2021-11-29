@@ -1,0 +1,13 @@
+{
+    "name":  "MyNewPlugin",
+    "version-string":  "1.0.0",
+    "description":  "",
+    "license":  "MIT",
+    "dependencies":  [
+                         "spdlog"
+                     ],
+    "script-version":  "11129",
+    "build-config":  "MT",
+    "build-target":  "SE",
+    "install-name":  "MyNewPluginInstall"
+}
