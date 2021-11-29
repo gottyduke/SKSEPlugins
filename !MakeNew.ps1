@@ -4,7 +4,7 @@ param (
     [Parameter(Mandatory)][ValidateSet('P', 'L')][char]$Type,
     [string]$Destination,
     [string]$Description,
-    [string[]]$AddDependencies
+    [string[]]$AddDependencies = @()
 )
 
 $ErrorActionPreference = "Stop"
@@ -70,7 +70,8 @@ if ($Description) {
     $Json.'description' = $Description
 }
 if ($AddDependencies) {
-    $Json.'dependencies' = $AddDependencies
+    $Json.'dependencies' += $AddDependencies
+    $Json.'dependencies' = $Json.'dependencies' | Sort-Object
 }
 if ($Destination) {
     $Json.'install-name' = $Destination
@@ -86,8 +87,8 @@ Write-Host "`tNew project <$Name> generated." -ForegroundColor Green
 # SIG # Begin signature block
 # MIIR2wYJKoZIhvcNAQcCoIIRzDCCEcgCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQU5+B/GFyZvzhArrFn4Ldgw0SM
-# 1GSggg1BMIIDBjCCAe6gAwIBAgIQNkaQTCtrQ7NPmyNqlKMtlDANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQURkP0ahcwCztJBHPCIPeDs1SC
+# lweggg1BMIIDBjCCAe6gAwIBAgIQNkaQTCtrQ7NPmyNqlKMtlDANBgkqhkiG9w0B
 # AQsFADAbMRkwFwYDVQQDDBBBVEEgQXV0aGVudGljb2RlMB4XDTIxMTEyODE1MTMy
 # N1oXDTIyMTEyODE1MzMyN1owGzEZMBcGA1UEAwwQQVRBIEF1dGhlbnRpY29kZTCC
 # ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANoBGMeVEUQXzEw352NicaE9
@@ -161,23 +162,23 @@ Write-Host "`tNew project <$Name> generated." -ForegroundColor Green
 # AQEwLzAbMRkwFwYDVQQDDBBBVEEgQXV0aGVudGljb2RlAhA2RpBMK2tDs0+bI2qU
 # oy2UMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqG
 # SIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3
-# AgEVMCMGCSqGSIb3DQEJBDEWBBTZrxiiMPKuk3mAualY+Ep43gOqtjANBgkqhkiG
-# 9w0BAQEFAASCAQBgllUOaBq4qSMDfWs7P14BEYNTuU2vY/1ars4hdmKuUx42BkSr
-# T737sJz17VstiqhjPm6El08PI5KlH7Drl7bOmwk0+3cdYYwI6Cx2CKAB+uAFKOH/
-# jQHXL4abqVE2umB+yC9GCxo+H1rXVDjZaxD+/rAeLVOyvhasvtDlY4FoiFHQDXhP
-# nzumMu86lIpoOi8aBeADKg+XpOWAHwO/leO+DIrgcm2N6xChOc2WQz0rMuFJOcjp
-# tcIF+sui+IpHivNP78kZjsUeqn0AnX3X0EzbfuuP1au/4JmS9Nk8GLAhCwfRFF/p
-# M1O5z6jBQvOvNCB6hm+qWtW3wCUEQI8r3FwaoYICMDCCAiwGCSqGSIb3DQEJBjGC
+# AgEVMCMGCSqGSIb3DQEJBDEWBBRNj6k7FnE+IJcxRSoX02LKIkPxuzANBgkqhkiG
+# 9w0BAQEFAASCAQBCVo4AbotwzN5aNJ1KXSr2kEMn20Dn2zxcrF4TXehpp8tiH+KB
+# w8a4MEIF9cXsAZlRTjmR8qCG7NnlQve5TQiyjNjDi9BcczpB9ChtFfJef0sR/yBS
+# dCurvqav3ZRawGUsHQAzfkapLkO3jWWCVqL2F3Phmyg2PVBI2dpeV8r/cJA0vsMa
+# KzPFqN9wzU6ZBY3zITM/cjHmlUgvK9HI9h62cluGf1C5G9kBqPs/Qt9ZPOl1gxcy
+# V7gllJ/bN+kQFd6b3d/XH67RUy1JwEg1BXk0qfyBz9RXVZ0M7cuMQSp8KZNLt9HB
+# PKAMj+zZR/E5wouNPO2pW/BY2KFMegbZn6OYoYICMDCCAiwGCSqGSIb3DQEJBjGC
 # Ah0wggIZAgEBMIGGMHIxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJ
 # bmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0
 # IFNIQTIgQXNzdXJlZCBJRCBUaW1lc3RhbXBpbmcgQ0ECEA1CSuC+Ooj/YEAhzhQA
 # 8N0wDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwG
-# CSqGSIb3DQEJBTEPFw0yMTExMjkxMzA1MzZaMC8GCSqGSIb3DQEJBDEiBCCjDKiN
-# Kv2r3Jtyf11KOJuUcOrLQ52awZ9tjAklMDEprDANBgkqhkiG9w0BAQEFAASCAQBk
-# ULcF3O6xaSgOgGnJTFZVYip+95HthYL6d3lr5szDql3AcSCfOo26QucDmcYaM+Q8
-# dVqMofHnt0JkSnf9DOcU17aRZ85gzfuWBTlnB75YBSicWzBxxCWN5y1pIklxSdgi
-# OVgKcZ+mI0mKXSX+STLYea33XlMmP5N2LcrpFincbyqch0JvvxSO2BsLGy6iBrtN
-# +yf2HJ5jK3qaIiJF9+4k46qZQnS1EJTZMw5asCoCYliYulKV3V74yCq7fqhVG3uV
-# efIqHMQmf6I/oW21Pr1eiY2tyLHNe+EuWrA5pTPLRbSeMI69nG1n7Mi7d2OCAWPX
-# 1TBHf9AKaRRTdu0PNBTj
+# CSqGSIb3DQEJBTEPFw0yMTExMjkyMTQxMDRaMC8GCSqGSIb3DQEJBDEiBCAvu1fa
+# 8+ACpYGjcyG+FRkan1qVUkcDt3MpSro1vQ23GDANBgkqhkiG9w0BAQEFAASCAQBj
+# HHrawlMjs2JRSy0Ge9SoP+AdgRfxeCgaVDhMCFJ4icSJZkzt0bXALPewdbMhJa0l
+# tPIPR3ipPx2rwPhxHkfIKT7/oSxjE78smQlftMtf1ZsFx33Q8HKIaKPlwY4JPd3t
+# KOXariKKGD4Gi/+TKWC/bJZMBgfJ1Fov7sbPWezzbLcC2iAThLZuJce6mfcyQlAW
+# TDryEmGbz3l21NhAhm0/Y4SxHp1tNPQMjJMJvMx1DfXKE+7IqVOR67XhUBaQHkwD
+# UdRqGID2XKGtLHnFpvIab5Bjhb1L0erN/G7SPAMAOGsO6rNQVSahUwys9P10Mhxb
+# Yqzp0WD14J2vTe3PRob0
 # SIG # End signature block

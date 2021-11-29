@@ -1,3 +1,5 @@
+#Requires -Version 5
+
 # args
 param(
 	[string]$Mode0,
@@ -5,12 +7,91 @@ param(
 	[string]$CustomCLib
 )
 
+$ErrorActionPreference = 'Stop'
+
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+$admin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
 $env:DKScriptVersion = '11129'
 $env:BuildConfig = $Mode0
 $env:BuildTarget = $Mode1
 
-$ErrorActionPreference = 'Stop'
+Write-Host "`tDKScriptVersion $env:DKScriptVersion`t$Mode0`t$Mode1`n"
 
+# bootstrap
+if ($Mode0 -eq 'BOOTSTRAP') {
+	if (-not $admin) {
+		Write-Host "`tExecute this script with administrator privilege to initiate bootstrapping!" -ForegroundColor Red
+		Exit
+	}
+
+	Write-Host "`t>>> Checking out requirements... <<<" -ForegroundColor Yellow
+	if (-not (Test-Path "$env:VCPKG_ROOT/vcpkg.exe" -PathType Leaf)) {
+		Write-Host "`tMissing VCPKG_ROOT or vcpkg installation" -ForegroundColor Red
+	
+		if (Test-Path "$PSScriptRoot/vcpkg/vcpkg.exe" -PathType Leaf) {
+			Write-Host "`tFound local vcpkg installation, mapping latest" -ForegroundColor Green
+			& .\vcpkg\bootstrap-vcpkg.bat | Out-Null
+			& .\vcpkg\vcpkg.exe integrate install | Out-Null
+		} else {
+			Remove-Item "$PSScriptRoot/vcpkg" -Recurse -Force -Confirm:$false -ErrorAction Ignore
+			Write-Host "`tBootstrapping vcpkg..." -ForegroundColor Yellow -NoNewline
+			& git clone -q https://github.com/microsoft/vcpkg
+			& .\vcpkg\bootstrap-vcpkg.bat | Out-Null
+			& .\vcpkg\vcpkg.exe integrate install | Out-Null
+			Write-Host "`r`tInstalled vcpkg, mapping path" -ForegroundColor Green
+		}
+	
+		$env:VCPKG_ROOT = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/vcpkg")
+		[System.Environment]::SetEnvironmentVariable('VCPKG_ROOT', $env:VCPKG_ROOT, 'Machine')
+	}
+	Write-Host "`tVCPKG_ROOT has been set to [$env:VCPKG_ROOT]`n" -ForegroundColor Green
+
+	if (-not (Test-Path "$env:CommonLibSSEPath/CMakeLists.txt" -PathType Leaf)) {
+		Write-Host "`tMissing CommonLibSSEPath or CLib installation" -ForegroundColor Red
+	
+		if (Test-Path "$PSScriptRoot/Library/CommonLibSSE/CMakeLists.txt" -PathType Leaf) {
+			Write-Host "`tFound local CLib installation, mapping latest" -ForegroundColor Green
+			Push-Location "$PSScriptRoot/Library/CommonLibSSE"
+			& git checkout -f master -q
+			Pop-Location
+		} else {
+			Remove-Item "$PSScriptRoot/Library/CommonLibSSE" -Recurse -Force -Confirm:$false -ErrorAction Ignore
+			Write-Host "`tBootstrapping CLib..." -ForegroundColor Yellow -NoNewline
+			& git clone https://github.com/Ryan-rsm-McKenzie/CommonLibSSE Library/CommonLibSSE -q
+			Write-Host "`r`tInstalled CLib, mapping path" -ForegroundColor Green
+		}
+	
+		$env:CommonLibSSEPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/Library/CommonLibSSE")
+		[System.Environment]::SetEnvironmentVariable('CommonLibSSEPath', $env:CommonLibSSEPath, 'Machine')
+	}
+	Write-Host "`tCommonLibSSEPath has been set to [$env:CommonLibSSEPath]`n" -ForegroundColor Green
+
+	if (-not (Test-Path "$env:DKUtilPath/CMakeLists.txt" -PathType Leaf)) {
+		Write-Host "`tMissing DKUtilPath or CLib installation" -ForegroundColor Red
+	
+		if (Test-Path "$PSScriptRoot/Library/DKUtil/CMakeLists.txt" -PathType Leaf) {
+			Write-Host "`tFound local DKUtil installation, mapping latest" -ForegroundColor Green
+			Push-Location "$PSScriptRoot/Library/DKUtil"
+			& git checkout -f master -q
+			Pop-Location
+		} else {
+			Remove-Item "$PSScriptRoot/Library/DKUtil" -Recurse -Force -Confirm:$false -ErrorAction Ignore
+			Write-Host "`tBootstrapping DKUtil..." -ForegroundColor Yellow -NoNewline
+			& git clone https://github.com/gottyduke/DKUtil Library/DKUtil -q
+			Write-Host "`r`tInstalled DKUtil, mapping path" -ForegroundColor Green
+		}
+	
+		$env:DKUtilPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/Library/DKUtil")
+		[System.Environment]::SetEnvironmentVariable('DKUtilPath', $env:DKUtilPath, 'Machine')
+	}
+	Write-Host "`tDKUtilPath has been set to [$env:DKUtilPath]`n" -ForegroundColor Green
+
+	Write-Host "`t>>> Bootstrapping has finished! <<<" -ForegroundColor Green
+	Exit
+}
+
+# CMakeLists.txt
 $Header = (Get-Date -UFormat "# Auto generated @ %R %B %d`n") + "cmake_minimum_required(VERSION 3.19) `n`nset(LINKAGE_OVERRIDE "
 $isAE
 $Boiler = @'
@@ -55,16 +136,20 @@ if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
 endif()
 
 '@
-$Trail = "`n`nset(GROUP CLib)`n"
+$Trail = "`n`nset(GROUP CLib)`nmessage(CHECK_START `"Rebuilding CommonLib`")`n"
 $CMakeLists
+[string[]]$Dependencies
+$Triplet
 
 # build configuration
 if ($Mode0 -eq 'MT') {
-	$Header = $Header + "FALSE CACHE BOOL `"`")`n"
-	Write-Host "`t***** Building Static MultiThreaded *****`n`tvcpkg : x64-windows-static" -ForegroundColor DarkGreen
+	$Header += "FALSE CACHE BOOL `"`")`n"
+	$Triplet = "x64-windows-static"
+	Write-Host "`t***** Building Static MultiThreaded *****`n`tvcpkg : $Triplet" -ForegroundColor DarkGreen
 } elseif ($Mode0 -eq 'MD') {
-	$Header = $Header + "TRUE CACHE BOOL `"`")`n"
-	Write-Host "`t***** Building Runtime MultiThreadedDLL *****`n`tvcpkg : x64-windows-static-md" -ForegroundColor Red
+	$Header += "TRUE CACHE BOOL `"`")`n"
+	$Triplet = "x64-windows-static-md"
+	Write-Host "`t***** Building Runtime MultiThreadedDLL *****`n`tvcpkg : $Triplet" -ForegroundColor DarkMagenta
 } else { # trigger zero_check
 	if (-not (Test-Path "$PSScriptRoot/CMakeLists.txt" -PathType Leaf)) {
 		Write-Host "`tRun !Rebuild in MT or MD mode first." -ForegroundColor Red
@@ -82,7 +167,7 @@ if ($Mode1 -eq 'AE') {
 	Write-Host "`tTarget: Anniversary Edition" -ForegroundColor Yellow
 	$isAE = 'TRUE'
 } elseif ($Mode1 -eq 'SE') {
-	Write-Host "`tTarget: Special Edition" -ForegroundColor Blue
+	Write-Host "`tTarget: Special Edition" -ForegroundColor Yellow
 	$isAE = 'FALSE'
 } else {
 	Write-Host "`tUnknown game version specified!" -ForegroundColor Red
@@ -96,65 +181,118 @@ if ($CustomCLib -and (Test-Path "$Resolved/CMakeLists.txt" -PathType Leaf)) { # 
 	Write-Host "`t==> Rebasing custom CLib <==" -ForegroundColor Red
 	$env:CommonLibSSEPath = $Resolved
 	$Resolved = (Resolve-Path $Resolved -Relative) + " $PSScriptRoot/Build/Clib" -replace '\\', '/'
-	$Trail = $Trail + "add_subdirectory($Resolved)`n`n"
+	$Trail += "add_subdirectory($Resolved)`n`n"
 } elseif ($CustomCLib -eq '0') { # default env flag
-	Write-Host "`t==> Rebasing custom CLib <==" -ForegroundColor Red
-	$Resolved = (Resolve-Path $env:CommonLibSSEPath -Relative) + " $PSScriptRoot/Build/Clib" -replace '\\', '/'
-	$Trail = $Trail + "add_subdirectory($Resolved)`n`n"
-} else {
-	Push-Location $env:CommonLibSSEPath
-	if ($Mode1 -eq 'AE') {
-		Write-Host "`t==> Rebasing latest CLib <==" -ForegroundColor Green
-		& git checkout -f master -q
-	} elseif ($Mode1 -eq 'SE') {
-		Write-Host "`t==> Rebasing legacy CLib <==" -ForegroundColor Green
-		& git checkout -f 575f84a -q
+	if (Test-Path "$env:CommonLibSSEPath/CMakeLists.txt" -PathType Leaf) {
+		Write-Host "`t==> Rebasing custom CLib <==" -ForegroundColor Red
+		$Resolved = (Resolve-Path $env:CommonLibSSEPath -Relative) + " $PSScriptRoot/Build/Clib" -replace '\\', '/'
+	} else {
+		Write-Host "`t==> Rebasing custom CLib failed <==`n`tCommonLibSSEPath not set or incorrect" -ForegroundColor Red
+		Exit
 	}
-	Pop-Location	
+	$Trail += "add_subdirectory($Resolved)`n`n"
+} else {
+	if (Test-Path "$env:CommonLibSSEPath/CMakeLists.txt" -PathType Leaf) {
+		Push-Location $env:CommonLibSSEPath
+		if ($Mode1 -eq 'AE') {
+			Write-Host "`t==> Rebasing latest CLib <==" -ForegroundColor Green
+			& git checkout -f master -q
+		} elseif ($Mode1 -eq 'SE') {
+			Write-Host "`t==> Rebasing legacy CLib <==" -ForegroundColor Green
+			& git checkout -f 575f84a -q
+		}
+		Pop-Location
+	} else {
+		Write-Host "`t==> Rebasing default CLib failed <==`n`tCommonLibSSEPath not set or incorrect" -ForegroundColor Red
+		Exit
+	}
 	
 	# use custom CMakeLists for CommonLibSSE
-	$Trail = $Trail + @'
+	$Trail += @'
 
 configure_file(
-	${CMAKE_CURRENT_SOURCE_DIR}/Library/ClibCustomCMakeLists.txt.in
+	$ENV{DKUtilPath}/cmake/CLibCustomCMakeLists.txt.in
 	$ENV{CommonLibSSEPath}/CMakeLists.txt
 	COPYONLY
 )
-
 add_subdirectory($ENV{CommonLibSSEPath})
 
 '@
 }
-$Header = $Header + "set(ANNIVERSARY_EDITION $isAE CACHE BOOL `"`")`n`n"
+$Trail += "`nmessage(CHECK_PASS `"Complete`")`n"
+
+
+# clib dependencies
+$vcpkg = [IO.File]::ReadAllText("$env:CommonLibSSEPath/vcpkg.json") | ConvertFrom-Json
+$Dependencies += $vcpkg.'dependencies'
+
+# ae switch
+$Header += "set(ANNIVERSARY_EDITION $isAE CACHE BOOL `"`")`n`n"
 
 # clean build folder
 Write-Host "`tCleaning build folder..."
 Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction Ignore
 
 # manage all sub projects
-Write-Host "`tGenerating CMakeLists.txt for projects below:"
+Write-Host "`tGenerating CMakeLists.txt..."
 @('Library', 'Plugins') | ForEach-Object {
-	$Trail = $Trail + "`nset(GROUP $_)`n"
+	$Trail += "`nset(GROUP $_)`n"
 	Get-ChildItem $_ -Directory -Exclude 'CommonLibSSE' -Recurse -ErrorAction SilentlyContinue | Resolve-Path -Relative | ForEach-Object {
 		if (Test-Path "$PSScriptRoot/$_/CMakeLists.txt" -PathType Leaf) {
 			$projectDir = $_.Substring(2) -replace '\\', '/'
-			Write-Host "`t`t$projectDir" -ForegroundColor Cyan
-			$Trail = $Trail + "add_subdirectory(`"$projectDir`")`n"
+			$Trail += "message(CHECK_START `"Rebuilding $projectDir`")`n"
+			$Trail += "add_subdirectory(`"$projectDir`")`n"
+			$Trail += "message(CHECK_PASS `"Complete`")`n"
+			$vcpkg = [IO.File]::ReadAllText("$PSScriptRoot/$_/vcpkg.json") | ConvertFrom-Json
+			$Dependencies += $vcpkg.'dependencies'
 		}
 	}
 }
 
-$CMakeLists = $Header + $Boiler +$Trail
+$CMakeLists = $Header + $Boiler + $Trail
 [IO.File]::WriteAllText("$PSScriptRoot/CMakeLists.txt", $CMakeLists)
 
+# build dependencies
+Write-Host "`tBuilding dependencies..."
+$Dependencies = $Dependencies | Select-Object -Unique
+$Installed = Get-ChildItem -Path $env:VCPKG_ROOT\installed\$Triplet\share -Directory -Force -ErrorAction SilentlyContinue
+$Dependencies.ForEach({
+	if ($Installed -and $Installed.Name.Contains($_)) {
+		Write-Host "`t`t* [Installed] $_" -ForegroundColor Green
+	} else {
+		Write-Host "`t`t! [Building] $_" -ForegroundColor Red -NoNewline
+		& $env:VCPKG_ROOT\vcpkg install ${_}:$Triplet | Out-Null
+		Write-Host "`r`t`t* [Complete] $_" -ForegroundColor Green
+	}
+})
+
 # cmake
-Write-Host "`tExecuting CMake..." -ForegroundColor Yellow
-& cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot
+Write-Host "`tExecuting CMake..."
+$CurProject
+$CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot | ForEach-Object {
+	if ($_.StartsWith('-- Rebuilding ') -and -not ($_.EndsWith(' - Complete'))) {
+		$CurProject = $_.Substring(14)
+		Write-Host "`t`t+ [Building] $CurProject" -ForegroundColor Yellow -NoNewline
+	} elseif ($_.StartsWith('-- Rebuilding ') -and $_.EndsWith(' - Complete')) {
+		Write-Host "`r`t`t* [Complete] $CurProject" -ForegroundColor Cyan
+	}
+
+	$_
+}
+
+if ($CMake[-3] -eq '-- Configuring done') {
+	Write-Host "`tRebuild complete" -ForegroundColor Green
+	$DOSPath = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/Build/skse64.sln")
+	& explorer.exe /select, $DOSPath
+} else {
+	Write-Host "`tRebuild failed" -ForegroundColor Red
+}
+
 # SIG # Begin signature block
 # MIIR2wYJKoZIhvcNAQcCoIIRzDCCEcgCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUnhLo5xB6j5FsTHKqdrVWb+/H
-# U5Gggg1BMIIDBjCCAe6gAwIBAgIQNkaQTCtrQ7NPmyNqlKMtlDANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUlRTm86xSDTo/JjWwRPLr47qw
+# IY+ggg1BMIIDBjCCAe6gAwIBAgIQNkaQTCtrQ7NPmyNqlKMtlDANBgkqhkiG9w0B
 # AQsFADAbMRkwFwYDVQQDDBBBVEEgQXV0aGVudGljb2RlMB4XDTIxMTEyODE1MTMy
 # N1oXDTIyMTEyODE1MzMyN1owGzEZMBcGA1UEAwwQQVRBIEF1dGhlbnRpY29kZTCC
 # ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBANoBGMeVEUQXzEw352NicaE9
@@ -228,23 +366,23 @@ Write-Host "`tExecuting CMake..." -ForegroundColor Yellow
 # AQEwLzAbMRkwFwYDVQQDDBBBVEEgQXV0aGVudGljb2RlAhA2RpBMK2tDs0+bI2qU
 # oy2UMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqG
 # SIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3
-# AgEVMCMGCSqGSIb3DQEJBDEWBBQOEh/oCot1Fr+2jXPxvU8SEiYKbzANBgkqhkiG
-# 9w0BAQEFAASCAQAJ09IECKTiUec6SMNlNzGMvI8QEpvdk1Wu9nmm+W/VodzeT3Qu
-# SzLlxaL1te0Nv0i3F6rCiVgjkThCPe8iS6ztAj51nJJuYlrzqVKzJ+CdWXCIUfyG
-# BQm8RXU9cuG3Uk/REZ+mfQu6khFH63hkmEZDKxKTEZl8fzLe8DP75SqWNkaGuG7s
-# KlM3EVIBn3rbbNBuvlsbyU+p6lJWf53555WhXOqX1j4m3nW9EcpYl/CTNetGhafe
-# iVJHGyqVIRCy+zO0jofMELam4DkYijIkcan37XK00BxrapTH6P3KWBMaUwISlnkq
-# X8wBK7nR1dkgM4Cs3qo9rKINezMJR+5NsA7MoYICMDCCAiwGCSqGSIb3DQEJBjGC
+# AgEVMCMGCSqGSIb3DQEJBDEWBBSbrpSEkamftkrl19pLpLzra7SDhTANBgkqhkiG
+# 9w0BAQEFAASCAQBA+elFCc+XEfLNKR+yJToPDl4yCJXBXunSPA/BYKX89e1UIpee
+# O7OUxwF/s1p8m8rJuP4nN16numZ8lssqoktRBXZxJc1D5kuSj6ser7r/mqpeCd6C
+# /Y019Jz428vxBpm1/xr+Ih8hlX/A7KNHMdcflCtQiQFJ5tvoHGB6GPLJVnhQiF9b
+# ur10v7zHpTEYhLP5Kkt5TYDpTw3s5MjLKEdRkUl0CcIwQXpWK4JAXOYAUlsxj2hf
+# g7hOTNpQTUy8ka02y/O2BYY2b8oeseknfDPpK2J0w8cvbHww/QVtjqP4AxHTQEQz
+# UmYsKnykDOUUPbYPq/9/oM87VskAZV1uRkpLoYICMDCCAiwGCSqGSIb3DQEJBjGC
 # Ah0wggIZAgEBMIGGMHIxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJ
 # bmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0
 # IFNIQTIgQXNzdXJlZCBJRCBUaW1lc3RhbXBpbmcgQ0ECEA1CSuC+Ooj/YEAhzhQA
 # 8N0wDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwG
-# CSqGSIb3DQEJBTEPFw0yMTExMjkxMjM5NTBaMC8GCSqGSIb3DQEJBDEiBCCJsjh/
-# yiEqKTtscAVXFwSVNE0UoO0Svb/mUX3EbgmVczANBgkqhkiG9w0BAQEFAASCAQCK
-# LdoS+nWXrhMUgi3UtluP3FVrI0jHMZ/gRdJtcuG/kwoBMLJ9WfX/WiShMH18AlBm
-# DAdsmoJYfAnYB99mKbdSqwOfCx+LoMtk6/vWGg7PZ6O4TK9OopaZ9gG67vUX0HNH
-# +V5cdcYWgy4UFwgVIeFXnLDV+bU9SxT0Vj4lOTu9mGRymv8c9e1jQFYB/VG3RLWI
-# ml4pc8G18SwHAkq8uyh4byx++lipIYzokZVSDt8L4gnNi3Kb+r5m2fp7XW73McT+
-# Isp+sxFrzbETe6VNx8FGpEaMVGtLDE/CfvMu6CTPIh3a5p0hPcw0Vl7cRvCnkZJQ
-# zSDmCVHn5HafoPYPaVVo
+# CSqGSIb3DQEJBTEPFw0yMTExMjkyMTQxMDRaMC8GCSqGSIb3DQEJBDEiBCBq0rXS
+# qGc/Sq1MMhz+/0lNbDAFirYgLiCDzeOYaC7gTzANBgkqhkiG9w0BAQEFAASCAQAQ
+# FJN3qNHmD5/GGA7IJfaxxg9XXH22MXufLV8t1yLicMmRVh0Ck1i3IFzBFNLckCJm
+# ApZklC9SJG/s0j3KzFo3EhhEgeH1rySN6xu1gaAm61nCTINo2EN1XjiNgLOZ23LK
+# 17KdOGcqsxm1AOs9rtMwoKeqr8tioBoa2lCwXiOJ5nb4IknlEet4DQZq7GCSOa56
+# I3ydCcQd4Ha2S/zZp4fv/3GzesQywcUcD06wi1KK/Dt8JipKhc0CxWd2OPdEju/p
+# CwJnpV998pOudrsWa9mwgicEfON6lxkxFanGEttIgVlfkV0i98z9dOYQ0NEuUy2y
+# thOcoW58XmYJAYBOdSvu
 # SIG # End signature block
