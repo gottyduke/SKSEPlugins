@@ -92,7 +92,7 @@ if ($a_mode -eq 'COPY') { # post build copy event
                 Write-Host "`tDone!"
             }
         }
-
+        
         # shockwave
         if (Test-Path "$PSScriptRoot/Interface/*.swf" -PathType Leaf) {
             Write-Host "`tCopying shockwave files..."

@@ -2,8 +2,8 @@
 
 # args
 param(
-	[string]$Mode0,
-	[string]$Mode1,
+	[ValidateSet('MT', 'MD', 'BOOTSTRAP', '')][string]$Mode0,
+	[ValidateSet('AE', 'SE', 'REDO', '')][string]$Mode1,
 	[ValidateSet(0)]$CustomCLib
 )
 
@@ -13,7 +13,7 @@ $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Pri
 $admin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 $env:RebuildInvoke = $true
-$env:DKScriptVersion = '11130'
+$env:DKScriptVersion = '11201'
 $env:BuildConfig = $Mode0
 $env:BuildTarget = $Mode1
 
@@ -28,16 +28,19 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
 	Add-Type -AssemblyName System.Windows.Forms | Out-Null
 
-	Write-Host "`t! BOOTSTRAP initiating..." -ForegroundColor Red -NoNewline
-	[Environment]::SetEnvironmentVariable('VCPKG_ROOT', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('CommonLibSSEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('DKUtilPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('SkyrimSEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('SkyrimAEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('MO2SkyrimSEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('MO2SkyrimAEPath', $null, 'Machine')
-	Write-Host "`t! BOOTSTRAP cleared cache" -ForegroundColor Green
+	if ($Mode1 -eq 'REDO') {
+		Write-Host "`tBOOTSTRAP REDO, please wait..." -ForegroundColor Red -NoNewline
+		[Environment]::SetEnvironmentVariable('CommonLibSSEPath', $null, 'Machine')
+		[Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $null, 'Machine')
+		[Environment]::SetEnvironmentVariable('DKUtilPath', $null, 'Machine')
+		[Environment]::SetEnvironmentVariable('SkyrimSEPath', $null, 'Machine')
+		[Environment]::SetEnvironmentVariable('SkyrimAEPath', $null, 'Machine')
+		[Environment]::SetEnvironmentVariable('MO2SkyrimSEPath', $null, 'Machine')
+		[Environment]::SetEnvironmentVariable('MO2SkyrimAEPath', $null, 'Machine')
+		[Environment]::SetEnvironmentVariable('SKSETemplatePath', $null, 'Machine')
+		[Environment]::SetEnvironmentVariable('SKSEPluginAuthor', $null, 'Machine')
+		Write-Host "`r`tBOOTSTRAP initiated!        " -ForegroundColor Yellow
+	}
 
 	function Initialize-Repo {
 		param (
@@ -50,10 +53,10 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 
 		$CurrentEnv = [Environment]::GetEnvironmentVariable($EnvName, 'Machine')
 		if (-not (Test-Path "$CurrentEnv/$Token" -PathType Leaf)) {
-			Write-Host "`n`t! Missing $RepoName" -ForegroundColor Red
+			Write-Host "`n`t! Missing $RepoName" -ForegroundColor Red -NoNewline
 		
 			if (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
-				Write-Host "`t- Found local $RepoName, mapping latest" -ForegroundColor Green
+				Write-Host "`r`t* Located local $RepoName, mapping latest" -ForegroundColor Green
 			} else {
 				Remove-Item "$PSScriptRoot/$Path" -Recurse -Force -Confirm:$false -ErrorAction Ignore
 				Write-Host "`t- Bootstrapping $EnvName..." -ForegroundColor Yellow -NoNewline
@@ -63,9 +66,9 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		
 			$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
 			[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
-			Write-Host "`t- $EnvName has been set to [$CurrentEnv]" -ForegroundColor Green
+			Write-Host "`t`t- $EnvName has been set to [$CurrentEnv]"
 		} else {
-			Write-Host "`n`t* Checked out $RepoName" -ForegroundColor Yellow
+			Write-Host "`n`t* Checked out $RepoName" -ForegroundColor Green
 		}
 	}
 
@@ -78,7 +81,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		$CurrentEnv = [Environment]::GetEnvironmentVariable($EnvName, 'Machine')
 		if (-not (Test-Path "$CurrentEnv/SkyrimSE.exe" -PathType Leaf)) {
 			Write-Host "`n`t! Missing $GameName" -ForegroundColor Red -NoNewline
-			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Add build support for $($GameName)?", 36, 'Game Build Support')		
+			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Add build support for $($GameName)?`nMake sure to select correct version of game if proceeding.", 36, 'Game Build Support')		
 			while ($Result -eq 6) {
 				$SkyrimFile = New-Object System.Windows.Forms.OpenFileDialog -Property @{
 					Title = "Select $($GameName) Executable"
@@ -88,33 +91,36 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 				$SkyrimFile.ShowDialog() | Out-Null
 				if (Test-Path $SkyrimFile.Filename -PathType Leaf) {
 					$CurrentEnv = Split-Path $SkyrimFile.Filename
-					Write-Host "`r`t* Located $GameName" -ForegroundColor Yellow
+					Write-Host "`r`t* Located $GameName" -ForegroundColor Green
 					[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
-					Write-Host "`t- $EnvName has been set to [$CurrentEnv]" -ForegroundColor Green
+					Write-Host "`t`t- $EnvName has been set to [$CurrentEnv]"
 					break
 				} else {
 					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Unable to locate $($GameName), try again?", 52, 'Game Build Support')		
 				}
 			}
 		} else {
-			Write-Host "`n`t* Checked out $EnvName" -ForegroundColor Yellow
+			Write-Host "`n`t* Checked out $GameName" -ForegroundColor Green
 		}
-		
-		$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable MO2 support for $($GameName)?", 36, 'MO2 Support')
-		while ($Result -eq 6) {
-			$MO2Dir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
-				Description = "Select MO2 directory for $($GameName), containing /mods, /profiles, and /override folders."
-				ShowNewFolderButton = $false
-			}
 
-			$MO2Dir.ShowDialog() | Out-Null
-			if (Test-Path "$($MO2Dir.SelectedPath)/mods" -PathType Container) {
-				$MO2EnvName = 'MO2' + $EnvName
-				Write-Host "`r`t* Enabled MO2 support for $GameName" -ForegroundColor Yellow
-				[System.Environment]::SetEnvironmentVariable($MO2EnvName, $MO2Dir.SelectedPath, 'Machine')
-				break
-			} else {
-				$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Not a valid MO2 path, try again?`nMO2 directory contains /mods, /profiles, and /override folders', 52, 'MO2 Support')
+		$MO2EnvName = 'MO2' + $EnvName
+		if (Test-Path "$([Environment]::GetEnvironmentVariable($MO2EnvName, 'Machine'))/mods" -PathType Container) {
+			Write-Host "`t* Enabled MO2 support for $GameName" -ForegroundColor Green
+		} else {
+			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable MO2 support for $($GameName)?`nMO2 Support: Allows plugin to be directly copied to MO2 directory for faster debugging.", 36, 'MO2 Support')
+			while ($Result -eq 6) {
+				$MO2Dir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
+					Description = "Select MO2 directory for $($GameName), containing /mods, /profiles, and /override folders."
+					ShowNewFolderButton = $false
+				}
+	
+				$MO2Dir.ShowDialog() | Out-Null
+				if (Test-Path "$($MO2Dir.SelectedPath)/mods" -PathType Container) {
+					[System.Environment]::SetEnvironmentVariable($MO2EnvName, $MO2Dir.SelectedPath, 'Machine')
+					break
+				} else {
+					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Not a valid MO2 path, try again?`nMO2 directory contains /mods, /profiles, and /override folders", 52, 'MO2 Support')
+				}
 			}
 		}
 	}
@@ -128,23 +134,25 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 
 	# CommonLibSSEPath
 	Initialize-Repo 'CommonLibSSEPath' 'CommonLib' 'CMakeLists.txt' 'Library/CommonLibSSE' 'https://github.com/Ryan-rsm-McKenzie/CommonLibSSE'
-	$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable custom CLib support?", 36, 'Custom CLib support') 
-	while ($Result -eq 6) {
-		$CustomCLib = New-Object System.Windows.Forms.OpenFileDialog -Property @{
-			Title = "Select custom CLib CMakeLists.txt"
-			Filter = 'CLib CMakeLists (CMakeLists.txt) | CMakeLists.txt'
+	if (-not (Test-Path "$env:CustomCommonLibSSEPath/CMakeLists.txt" -PathType Leaf)) {
+		$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Enable custom CLib support?', 36, 'Custom CLib support') 
+		while ($Result -eq 6) {
+			$CustomCLibDir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
+				Description = 'Select custom CLib directory, containing CMakeLists.txt'
+			}
+		
+			$CustomCLibDir.ShowDialog() | Out-Null
+			if (Test-Path "$($CustomCLibDir.SelectedPath)/CMakeLists.txt" -PathType Leaf) {
+				Write-Host "`t* Located custom CLib`n`t`t# To use custom CLib in build, append parameter '0' to the !Rebuild command."
+				[System.Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $CustomCLibDir.SelectedPath, 'Machine')
+				Write-Host "`t- CustomCommonLibSSEPath has been set to [$($CustomCLibDir.SelectedPath)]" -ForegroundColor Green
+				break
+			} else {
+				$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Unable to locate valid CMakeLists.txt, try again?', 52, 'Custom CLib support')		
+			}
 		}
-	
-		$CustomCLib.ShowDialog() | Out-Null
-		if (Test-Path $CustomCLib.Filename -PathType Leaf) {
-			$CurrentEnv = Split-Path $CustomCLib.Filename
-			Write-Host "`r`t* Located custom CLib" -ForegroundColor Yellow
-			[System.Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $CurrentEnv, 'Machine')
-			Write-Host "`t- CustomCommonLibSSEPath has been set to [$CurrentEnv]" -ForegroundColor Green
-			break
-		} else {
-			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Unable to locate valid CMakeLists.txt, try again?', 52, 'Custom CLib support')		
-		}
+	} else {
+		Write-Host "`t* Checked out custom CLib" -ForegroundColor Green
 	}
 
 	# DKUtilPath
@@ -164,6 +172,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	[System.Environment]::SetEnvironmentVariable('SKSEPluginAuthor', $Author, 'Machine')
 
 	Write-Host "`n`t>>> Bootstrapping has finished! <<<" -ForegroundColor Green
+	Write-Host "`tRestart current command line interface to apply settings."
 	Exit
 }
 
