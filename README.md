@@ -15,21 +15,13 @@ Env Variable | Value
 
 
 ## Build
-Execute the command `.\!Rebuild MT AE` to generate solution for `Anniversary Edition` with `MultiThreaded` config.  
+After cloning onto the working directory, execute bootstrap to initialize all toolchain and dependency setup.
+```
+.\Rebuild BOOTSTRAP FORCE
+```
+
+To generate solution for `Anniversary Edition` with `MultiThreaded` config:    
+```
+.\!Rebuild MT AE
+``` 
 The result solution file is located in the `Build` folder.
-
-### PostBuild Event
-The postbuild event will attempt to copy the product binary file to MO2 directory, which is expected to be in the game root folder with the name `MO2`.
-```
-SkyrimSEPath | SkyrimAEPath
-    Data
-    MO2
-        downloads
-        mods
-        override
-        profiles
-        webcache
-
-    skse64_loader.exe
-    SkyrimSE.exe
-```
