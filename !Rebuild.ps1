@@ -56,17 +56,18 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			Write-Host "`n`t! Missing $RepoName" -ForegroundColor Red -NoNewline
 		
 			if (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
-				Write-Host "`r`t* Located local $RepoName, mapping latest" -ForegroundColor Green
+				Write-Host "`r`t* Located local $RepoName" -ForegroundColor Green
 			} else {
 				Remove-Item "$PSScriptRoot/$Path" -Recurse -Force -Confirm:$false -ErrorAction Ignore
 				Write-Host "`r`t- Bootstrapping $EnvName..." -ForegroundColor Yellow -NoNewline
 				& git clone $RemoteUrl $Path -q
-				Write-Host "`r`t- Installed $RepoName, mapping path" -ForegroundColor Green
+				Write-Host "`r`t- Installed $RepoName" -ForegroundColor Green
 			}
 		
+			Write-Host "`tMapping path, please wait..." -NoNewline
 			$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
 			[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
-			Write-Host "`t`t- $EnvName has been set to [$CurrentEnv]"
+			Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]"
 		} else {
 			Write-Host "`n`t* Checked out $RepoName" -ForegroundColor Green
 		}
@@ -92,8 +93,9 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 				if (Test-Path $SkyrimFile.Filename -PathType Leaf) {
 					$CurrentEnv = Split-Path $SkyrimFile.Filename
 					Write-Host "`r`t* Located $GameName" -ForegroundColor Green
+					Write-Host "`tMapping path, please wait..." -NoNewline
 					[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
-					Write-Host "`t`t- $EnvName has been set to [$CurrentEnv]"
+					Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]"
 					break
 				} else {
 					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Unable to locate $($GameName), try again?", 52, 'Game Build Support')		
@@ -116,7 +118,9 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	
 				$MO2Dir.ShowDialog() | Out-Null
 				if (Test-Path "$($MO2Dir.SelectedPath)/mods" -PathType Container) {
+					Write-Host "`tMapping path, please wait..." -NoNewline
 					[System.Environment]::SetEnvironmentVariable($MO2EnvName, $MO2Dir.SelectedPath, 'Machine')
+					Write-Host "`r`t* Enabled MO2 support for $GameName" -ForegroundColor Green
 					break
 				} else {
 					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Not a valid MO2 path, try again?`nMO2 directory contains /mods, /profiles, and /override folders", 52, 'MO2 Support')
