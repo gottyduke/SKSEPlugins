@@ -3,7 +3,7 @@
 # args
 param(
 	[ValidateSet('MT', 'MD', 'BOOTSTRAP', '')][string]$Mode0,
-	[ValidateSet('AE', 'SE', 'REDO', '')][string]$Mode1,
+	[ValidateSet('AE', 'SE', '')][string]$Mode1,
 	[ValidateSet(0)]$CustomCLib
 )
 
@@ -25,22 +25,59 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		Write-Host "`tExecute with admin privilege to continue!" -ForegroundColor Red
 		Exit
 	}
+
+	$Signed = Get-AuthenticodeSignature "$PSScriptRoot\!Rebuild.ps1"
+	if ($Signed.Status -ne 'Valid') {
+		Write-Host "`t! Self signing updating..." -ForegroundColor Yellow -NoNewline
+		$scriptCert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Subject -eq 'CN=DKScriptSelfCert' }
+		if (-not $scriptCert) {
+			$authenticode = New-SelfSignedCertificate -Subject 'DKScriptSelfCert' -CertStoreLocation Cert:\LocalMachine\My -Type CodeSigningCert
+			$rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'LocalMachine')
+			$rootStore.Open('ReadWrite')
+			$rootStore.Add($authenticode)
+			$rootStore.Close()
+			$publisherStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'LocalMachine')
+			$publisherStore.Open('ReadWrite')
+			$publisherStore.Add($authenticode)
+			$publisherStore.Close()
+		}
+		$scriptCert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Subject -eq 'CN=DKScriptSelfCert' }
+		Set-AuthenticodeSignature "$PSScriptRoot/!MakeNew.ps1" -Certificate $scriptCert -TimeStampServer 'http://timestamp.digicert.com' | Out-Null
+		Set-AuthenticodeSignature "$PSScriptRoot/!Rebuild.ps1" -Certificate $scriptCert -TimeStampServer 'http://timestamp.digicert.com' | Out-Null
+		Set-AuthenticodeSignature "$PSScriptRoot/!Update.ps1" -Certificate $scriptCert -TimeStampServer 'http://timestamp.digicert.com' | Out-Null
+
+		$Signed = Get-AuthenticodeSignature "$PSScriptRoot\!Rebuild.ps1"
+		if ($Signed.Status -ne 'Valid') {
+			Write-Host "`r`t! Failed to complete self signing procecss!  " -ForegroundColor Red
+			Exit
+		} else {
+			Write-Host "`r`t* Self signing complete               `n" -ForegroundColor Green
+		}
+		
+		$OldPolicy = Get-ExecutionPolicy -Scope LocalMachine
+		if ($OldPolicy -eq 'Restricted') {
+			Write-Host "`tUpdated ExecutionPolicy to [RemoteSigned] on [LocalMachine]"
+			Set-ExecutionPolicy RemoteSigned -Scope LocalMachine
+		}
+
+		& $PSCommandPath $Mode0 $Mode1
+		Exit
+	}
+
 	Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
 	Add-Type -AssemblyName System.Windows.Forms | Out-Null
 
-	if ($Mode1 -eq 'REDO') {
-		Write-Host "`tBOOTSTRAP REDO, please wait..." -ForegroundColor Red -NoNewline
-		[Environment]::SetEnvironmentVariable('CommonLibSSEPath', $null, 'Machine')
-		[Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $null, 'Machine')
-		[Environment]::SetEnvironmentVariable('DKUtilPath', $null, 'Machine')
-		[Environment]::SetEnvironmentVariable('SkyrimSEPath', $null, 'Machine')
-		[Environment]::SetEnvironmentVariable('SkyrimAEPath', $null, 'Machine')
-		[Environment]::SetEnvironmentVariable('MO2SkyrimSEPath', $null, 'Machine')
-		[Environment]::SetEnvironmentVariable('MO2SkyrimAEPath', $null, 'Machine')
-		[Environment]::SetEnvironmentVariable('SKSETemplatePath', $null, 'Machine')
-		[Environment]::SetEnvironmentVariable('SKSEPluginAuthor', $null, 'Machine')
-		Write-Host "`r`tBOOTSTRAP initiated!        " -ForegroundColor Yellow
-	}
+	Write-Host "`tBOOTSTRAP starting, please wait..." -ForegroundColor Red -NoNewline
+	[Environment]::SetEnvironmentVariable('CommonLibSSEPath', $null, 'Machine')
+	[Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $null, 'Machine')
+	[Environment]::SetEnvironmentVariable('DKUtilPath', $null, 'Machine')
+	[Environment]::SetEnvironmentVariable('SkyrimSEPath', $null, 'Machine')
+	[Environment]::SetEnvironmentVariable('SkyrimAEPath', $null, 'Machine')
+	[Environment]::SetEnvironmentVariable('MO2SkyrimSEPath', $null, 'Machine')
+	[Environment]::SetEnvironmentVariable('MO2SkyrimAEPath', $null, 'Machine')
+	[Environment]::SetEnvironmentVariable('SKSETemplatePath', $null, 'Machine')
+	[Environment]::SetEnvironmentVariable('SKSEPluginAuthor', $null, 'Machine')
+	Write-Host "`r`tBOOTSTRAP initiated!               " -ForegroundColor Yellow
 
 	function Initialize-Repo {
 		param (
@@ -51,26 +88,19 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			[string]$RemoteUrl
 		)
 
-		$CurrentEnv = [Environment]::GetEnvironmentVariable($EnvName, 'Machine')
-		if (-not (Test-Path "$CurrentEnv/$Token" -PathType Leaf)) {
-			Write-Host "`n`t! Missing $RepoName" -ForegroundColor Red -NoNewline
-		
-			if (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
-				Write-Host "`r`t* Located local $RepoName" -ForegroundColor Green
-			} else {
-				Remove-Item "$PSScriptRoot/$Path" -Recurse -Force -Confirm:$false -ErrorAction Ignore
-				Write-Host "`r`t- Bootstrapping $EnvName..." -ForegroundColor Yellow -NoNewline
-				& git clone $RemoteUrl $Path -q
-				Write-Host "`r`t- Installed $RepoName" -ForegroundColor Green
-			}
-		
-			Write-Host "`tMapping path, please wait..." -NoNewline
-			$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
-			[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
-			Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]"
+		if (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
+			Write-Host "`n`t* Located local $RepoName   " -ForegroundColor Green
 		} else {
-			Write-Host "`n`t* Checked out $RepoName" -ForegroundColor Green
+			Remove-Item "$PSScriptRoot/$Path" -Recurse -Force -Confirm:$false -ErrorAction Ignore
+			Write-Host "`n`t- Bootstrapping $RepoName..." -ForegroundColor Yellow -NoNewline
+			& git clone $RemoteUrl $Path -q
+			Write-Host "`r`t- Installed $RepoName               " -ForegroundColor Green
 		}
+	
+		Write-Host "`t`t- Mapping path, please wait..." -NoNewline
+		$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
+		[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
+		Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
 	}
 
 	function Find-Game {
@@ -79,52 +109,43 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			[string]$GameName
 		)
 		
-		$CurrentEnv = [Environment]::GetEnvironmentVariable($EnvName, 'Machine')
-		if (-not (Test-Path "$CurrentEnv/SkyrimSE.exe" -PathType Leaf)) {
-			Write-Host "`n`t! Missing $GameName" -ForegroundColor Red -NoNewline
-			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Add build support for $($GameName)?`nMake sure to select correct version of game if proceeding.", 36, 'Game Build Support')		
-			while ($Result -eq 6) {
-				$SkyrimFile = New-Object System.Windows.Forms.OpenFileDialog -Property @{
-					Title = "Select $($GameName) Executable"
-					Filter = 'Skyrim Game (SkyrimSE.exe) | SkyrimSE.exe'
-				}
-			
-				$SkyrimFile.ShowDialog() | Out-Null
-				if (Test-Path $SkyrimFile.Filename -PathType Leaf) {
-					$CurrentEnv = Split-Path $SkyrimFile.Filename
-					Write-Host "`r`t* Located $GameName" -ForegroundColor Green
-					Write-Host "`tMapping path, please wait..." -NoNewline
-					[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
-					Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]"
-					break
-				} else {
-					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Unable to locate $($GameName), try again?", 52, 'Game Build Support')		
-				}
+		Write-Host "`n`t! Missing $GameName" -ForegroundColor Red -NoNewline
+		$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Add build support for $($GameName)?`n`nMake sure to select correct version of game if proceeding.", 36, 'Game Build Support')		
+		while ($Result -eq 6) {
+			$SkyrimFile = New-Object System.Windows.Forms.OpenFileDialog -Property @{
+				Title = "Select $($GameName) Executable"
+				Filter = 'Skyrim Game (SkyrimSE.exe) | SkyrimSE.exe'
 			}
-		} else {
-			Write-Host "`n`t* Checked out $GameName" -ForegroundColor Green
+		
+			$SkyrimFile.ShowDialog() | Out-Null
+			if (Test-Path $SkyrimFile.Filename -PathType Leaf) {
+				$CurrentEnv = Split-Path $SkyrimFile.Filename
+				Write-Host "`r`t* Located $GameName               " -ForegroundColor Green
+				Write-Host "`t`t- Mapping path, please wait..." -NoNewline
+				[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
+				Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
+				break
+			} else {
+				$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Unable to locate $($GameName), try again?", 52, 'Game Build Support')		
+			}
 		}
 
 		$MO2EnvName = 'MO2' + $EnvName
-		if (Test-Path "$([Environment]::GetEnvironmentVariable($MO2EnvName, 'Machine'))/mods" -PathType Container) {
-			Write-Host "`t* Enabled MO2 support for $GameName" -ForegroundColor Green
-		} else {
-			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable MO2 support for $($GameName)?`nMO2 Support: Allows plugin to be directly copied to MO2 directory for faster debugging.", 36, 'MO2 Support')
-			while ($Result -eq 6) {
-				$MO2Dir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
-					Description = "Select MO2 directory for $($GameName), containing /mods, /profiles, and /override folders."
-					ShowNewFolderButton = $false
-				}
-	
-				$MO2Dir.ShowDialog() | Out-Null
-				if (Test-Path "$($MO2Dir.SelectedPath)/mods" -PathType Container) {
-					Write-Host "`tMapping path, please wait..." -NoNewline
-					[System.Environment]::SetEnvironmentVariable($MO2EnvName, $MO2Dir.SelectedPath, 'Machine')
-					Write-Host "`r`t* Enabled MO2 support for $GameName" -ForegroundColor Green
-					break
-				} else {
-					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Not a valid MO2 path, try again?`nMO2 directory contains /mods, /profiles, and /override folders", 52, 'MO2 Support')
-				}
+		$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable MO2 support for $($GameName)?`n`nMO2 Support: Allows plugin to be directly copied to MO2 directory for faster debugging.", 36, 'MO2 Support')
+		while ($Result -eq 6) {
+			$MO2Dir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
+				Description = "Select MO2 directory for $($GameName), containing /mods, /profiles, and /override folders."
+				ShowNewFolderButton = $false
+			}
+
+			$MO2Dir.ShowDialog() | Out-Null
+			if (Test-Path "$($MO2Dir.SelectedPath)/mods" -PathType Container) {
+				Write-Host "`tMapping path, please wait..." -NoNewline
+				[System.Environment]::SetEnvironmentVariable($MO2EnvName, $MO2Dir.SelectedPath, 'Machine')
+				Write-Host "`r`t* Enabled MO2 support for $GameName               " -ForegroundColor Green
+				break
+			} else {
+				$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Not a valid MO2 path, try again?`n`nMO2 directory contains /mods, /profiles, and /override folders", 52, 'MO2 Support')
 			}
 		}
 	}
@@ -138,25 +159,22 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 
 	# CommonLibSSEPath
 	Initialize-Repo 'CommonLibSSEPath' 'CommonLib' 'CMakeLists.txt' 'Library/CommonLibSSE' 'https://github.com/Ryan-rsm-McKenzie/CommonLibSSE'
-	if (-not (Test-Path "$env:CustomCommonLibSSEPath/CMakeLists.txt" -PathType Leaf)) {
-		$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Enable custom CLib support?', 36, 'Custom CLib support') 
-		while ($Result -eq 6) {
-			$CustomCLibDir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
-				Description = 'Select custom CLib directory, containing CMakeLists.txt'
-			}
-		
-			$CustomCLibDir.ShowDialog() | Out-Null
-			if (Test-Path "$($CustomCLibDir.SelectedPath)/CMakeLists.txt" -PathType Leaf) {
-				Write-Host "`t* Located custom CLib`n`t`t# To use custom CLib in build, append parameter '0' to the !Rebuild command."
-				[System.Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $CustomCLibDir.SelectedPath, 'Machine')
-				Write-Host "`t- CustomCommonLibSSEPath has been set to [$($CustomCLibDir.SelectedPath)]" -ForegroundColor Green
-				break
-			} else {
-				$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Unable to locate valid CMakeLists.txt, try again?', 52, 'Custom CLib support')		
-			}
+	$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Enable custom CLib support?', 36, 'Custom CLib support') 
+	while ($Result -eq 6) {
+		$CustomCLibDir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
+			Description = 'Select custom CommonLib directory, containing CMakeLists.txt'
 		}
-	} else {
-		Write-Host "`t* Checked out custom CLib" -ForegroundColor Green
+	
+		$CustomCLibDir.ShowDialog() | Out-Null
+		if (Test-Path "$($CustomCLibDir.SelectedPath)/CMakeLists.txt" -PathType Leaf) {
+			Write-Host "`n`t* Enabled custom CommonLib" -ForegroundColor Green
+			[System.Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $CustomCLibDir.SelectedPath, 'Machine')
+			Write-Host "`t`t- CustomCommonLibSSEPath has been set to [$($CustomCLibDir.SelectedPath)]"
+			Write-Host "`t`t# To use custom CommonLib in build, append parameter '0' to the !Rebuild command."
+			break
+		} else {
+			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Unable to locate valid CMakeLists.txt, try again?', 52, 'Custom CLib support')		
+		}
 	}
 
 	# DKUtilPath
@@ -171,12 +189,15 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	# SkyrimAEPath
 	Find-Game 'SkyrimAEPath' 'Skyrim Anniversary Edition (1.6.xxx)'
 
-	$Author = [Microsoft.VisualBasic.Interaction]::InputBox('Input the mod author name:', 'Author', 'Anon')
-	Write-Host "`n`t* Plugin author: $Author" -ForegroundColor Magenta
+	$Author
+	while (-not $Author) {
+		$Author = [Microsoft.VisualBasic.Interaction]::InputBox("Input the mod author name:`n`nThis is used for !MakeNew command to generate projects", 'Author', 'Anon')
+	}
 	[System.Environment]::SetEnvironmentVariable('SKSEPluginAuthor', $Author, 'Machine')
+	Write-Host "`n`t* Plugin author: $Author" -ForegroundColor Magenta
 
 	Write-Host "`n`t>>> Bootstrapping has finished! <<<" -ForegroundColor Green
-	Write-Host "`tRestart current command line interface to apply settings."
+	Write-Host "`n`tRestart current command line interface to apply BOOTSTRAP."
 	Exit
 }
 
@@ -309,6 +330,7 @@ $Trail += "message(CHECK_PASS `"Complete`")`n`n"
 # clib dependencies
 $vcpkg = [IO.File]::ReadAllText("$env:CommonLibSSEPath/vcpkg.json") | ConvertFrom-Json
 $Dependencies += $vcpkg.'dependencies'
+$Dependencies += 'xbyak'
 
 # ae switch
 $Header += "set(ANNIVERSARY_EDITION $IsAE CACHE BOOL `"`")`n`n"
@@ -347,7 +369,7 @@ $Dependencies.ForEach({
 	} else {
 		Write-Host "`t`t! [Building] $_" -ForegroundColor Red -NoNewline
 		& $env:VCPKG_ROOT\vcpkg install ${_}:$Triplet | Out-Null
-		Write-Host "`r`t`t* [Complete] $_" -ForegroundColor Green
+		Write-Host "`r`t`t* [Complete] $_               " -ForegroundColor Green
 	}
 })
 
@@ -359,7 +381,7 @@ $CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot | ForEach-Object {
 		$CurProject = $_.Substring(14)
 		Write-Host "`t`t! [Building] $CurProject" -ForegroundColor Yellow -NoNewline
 	} elseif ($_.StartsWith('-- Rebuilding ') -and $_.EndsWith(' - Complete')) {
-		Write-Host "`r`t`t* [Complete] $CurProject" -ForegroundColor Cyan
+		Write-Host "`r`t`t* [Complete] $CurProject               " -ForegroundColor Cyan
 	}
 
 	$_
@@ -372,3 +394,101 @@ if ($CMake[-3] -eq '-- Configuring done') {
 } else {
 	Write-Host "`tRebuild failed" -ForegroundColor Red
 }
+# SIG # Begin signature block
+# MIIR2wYJKoZIhvcNAQcCoIIRzDCCEcgCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
+# gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUREOIk+zALJarcg0hGBmA+6SL
+# xtWggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
+# AQsFADAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0MB4XDTIxMTIwMjEyMzYz
+# MFoXDTIyMTIwMjEyNTYzMFowGzEZMBcGA1UEAwwQREtTY3JpcHRTZWxmQ2VydDCC
+# ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAL9d3xGpFZgLEPcI1mIG8OPB
+# GjeIk3zIyaanh/Z7XRcL3kz21M5/k/hATY9JRjMzciJVLnFT46vW2DRCJrp0oKyA
+# Uj2oE2jrvrUueS7Pu9WVVDN+nIWbW1lzlDutZ7uEMRaAQT8OgpsRTY/nA11Fvipb
+# kwK4tgpAjMQdxrqstxB+nbV9AcsgRh4YdzpkjoDm2Di8CQw5pEaBw2wAJO1GxH+D
+# UjU1xlbqRdgJVhjMMyg7p4LqwUQoZs7lAFINBwqC13m2qMr/m0lsgNny/0l8IRV/
+# m5RyAihlc8KvZbk/4oWs5hZjaOc5PKKi+d4wPpNw2T799bJSjOFEAcvPtqoK80EC
+# AwEAAaNGMEQwDgYDVR0PAQH/BAQDAgeAMBMGA1UdJQQMMAoGCCsGAQUFBwMDMB0G
+# A1UdDgQWBBSxj44nD0I+OD6c+ON8obenSrsbczANBgkqhkiG9w0BAQsFAAOCAQEA
+# J3YfLurEb8s51SBiDcuB2P00jHcZxYKwUNOqUfvjOUuvQu2UFKAbuM6y3ku6fMHC
+# s5Sp/WKnxPsa4aN+TgEi4ZB1f8G8VOsxnJd45t53BcBppxDY+YnaaP+M9iH0c+Bv
+# 5uKwl0+PwxsLyG1q2kTC7kjDO8zsBBwkHmksnZK7R7GgeStmftmylBaggFbbRAj9
+# en0IJocxsDYpbUxevTvwlHFlw1FvUbotDeug6Rlz7v/UPslNEi4JaylIpBju72me
+# AKkhNgwJyELUVr3iNQ1AG80QVaf6Yg6hzMcQTv1M/lOSl+wK+6SBgJ973eXT9FeJ
+# +7lIvb7kxLaPhIOLBMi72DCCBP4wggPmoAMCAQICEA1CSuC+Ooj/YEAhzhQA8N0w
+# DQYJKoZIhvcNAQELBQAwcjELMAkGA1UEBhMCVVMxFTATBgNVBAoTDERpZ2lDZXJ0
+# IEluYzEZMBcGA1UECxMQd3d3LmRpZ2ljZXJ0LmNvbTExMC8GA1UEAxMoRGlnaUNl
+# cnQgU0hBMiBBc3N1cmVkIElEIFRpbWVzdGFtcGluZyBDQTAeFw0yMTAxMDEwMDAw
+# MDBaFw0zMTAxMDYwMDAwMDBaMEgxCzAJBgNVBAYTAlVTMRcwFQYDVQQKEw5EaWdp
+# Q2VydCwgSW5jLjEgMB4GA1UEAxMXRGlnaUNlcnQgVGltZXN0YW1wIDIwMjEwggEi
+# MA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQDC5mGEZ8WK9Q0IpEXKY2tR1zoR
+# Qr0KdXVNlLQMULUmEP4dyG+RawyW5xpcSO9E5b+bYc0VkWJauP9nC5xj/TZqgfop
+# +N0rcIXeAhjzeG28ffnHbQk9vmp2h+mKvfiEXR52yeTGdnY6U9HR01o2j8aj4S8b
+# Ordh1nPsTm0zinxdRS1LsVDmQTo3VobckyON91Al6GTm3dOPL1e1hyDrDo4s1SPa
+# 9E14RuMDgzEpSlwMMYpKjIjF9zBa+RSvFV9sQ0kJ/SYjU/aNY+gaq1uxHTDCm2mC
+# tNv8VlS8H6GHq756WwogL0sJyZWnjbL61mOLTqVyHO6fegFz+BnW/g1JhL0BAgMB
+# AAGjggG4MIIBtDAOBgNVHQ8BAf8EBAMCB4AwDAYDVR0TAQH/BAIwADAWBgNVHSUB
+# Af8EDDAKBggrBgEFBQcDCDBBBgNVHSAEOjA4MDYGCWCGSAGG/WwHATApMCcGCCsG
+# AQUFBwIBFhtodHRwOi8vd3d3LmRpZ2ljZXJ0LmNvbS9DUFMwHwYDVR0jBBgwFoAU
+# 9LbhIB3+Ka7S5GGlsqIlssgXNW4wHQYDVR0OBBYEFDZEho6kurBmvrwoLR1ENt3j
+# anq8MHEGA1UdHwRqMGgwMqAwoC6GLGh0dHA6Ly9jcmwzLmRpZ2ljZXJ0LmNvbS9z
+# aGEyLWFzc3VyZWQtdHMuY3JsMDKgMKAuhixodHRwOi8vY3JsNC5kaWdpY2VydC5j
+# b20vc2hhMi1hc3N1cmVkLXRzLmNybDCBhQYIKwYBBQUHAQEEeTB3MCQGCCsGAQUF
+# BzABhhhodHRwOi8vb2NzcC5kaWdpY2VydC5jb20wTwYIKwYBBQUHMAKGQ2h0dHA6
+# Ly9jYWNlcnRzLmRpZ2ljZXJ0LmNvbS9EaWdpQ2VydFNIQTJBc3N1cmVkSURUaW1l
+# c3RhbXBpbmdDQS5jcnQwDQYJKoZIhvcNAQELBQADggEBAEgc3LXpmiO85xrnIA6O
+# Z0b9QnJRdAojR6OrktIlxHBZvhSg5SeBpU0UFRkHefDRBMOG2Tu9/kQCZk3taaQP
+# 9rhwz2Lo9VFKeHk2eie38+dSn5On7UOee+e03UEiifuHokYDTvz0/rdkd2NfI1Jp
+# g4L6GlPtkMyNoRdzDfTzZTlwS/Oc1np72gy8PTLQG8v1Yfx1CAB2vIEO+MDhXM/E
+# EXLnG2RJ2CKadRVC9S0yOIHa9GCiurRS+1zgYSQlT7LfySmoc0NR2r1j1h9bm/cu
+# G08THfdKDXF+l7f0P4TrweOjSaH6zqe/Vs+6WXZhiV9+p7SOZ3j5NpjhyyjaW4em
+# ii8wggUxMIIEGaADAgECAhAKoSXW1jIbfkHkBdo2l8IVMA0GCSqGSIb3DQEBCwUA
+# MGUxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsT
+# EHd3dy5kaWdpY2VydC5jb20xJDAiBgNVBAMTG0RpZ2lDZXJ0IEFzc3VyZWQgSUQg
+# Um9vdCBDQTAeFw0xNjAxMDcxMjAwMDBaFw0zMTAxMDcxMjAwMDBaMHIxCzAJBgNV
+# BAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJbmMxGTAXBgNVBAsTEHd3dy5kaWdp
+# Y2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0IFNIQTIgQXNzdXJlZCBJRCBUaW1l
+# c3RhbXBpbmcgQ0EwggEiMA0GCSqGSIb3DQEBAQUAA4IBDwAwggEKAoIBAQC90DLu
+# S82Pf92puoKZxTlUKFe2I0rEDgdFM1EQfdD5fU1ofue2oPSNs4jkl79jIZCYvxO8
+# V9PD4X4I1moUADj3Lh477sym9jJZ/l9lP+Cb6+NGRwYaVX4LJ37AovWg4N4iPw7/
+# fpX786O6Ij4YrBHk8JkDbTuFfAnT7l3ImgtU46gJcWvgzyIQD3XPcXJOCq3fQDpc
+# t1HhoXkUxk0kIzBdvOw8YGqsLwfM/fDqR9mIUF79Zm5WYScpiYRR5oLnRlD9lCos
+# p+R1PrqYD4R/nzEU1q3V8mTLex4F0IQZchfxFwbvPc3WTe8GQv2iUypPhR3EHTyv
+# z9qsEPXdrKzpVv+TAgMBAAGjggHOMIIByjAdBgNVHQ4EFgQU9LbhIB3+Ka7S5GGl
+# sqIlssgXNW4wHwYDVR0jBBgwFoAUReuir/SSy4IxLVGLp6chnfNtyA8wEgYDVR0T
+# AQH/BAgwBgEB/wIBADAOBgNVHQ8BAf8EBAMCAYYwEwYDVR0lBAwwCgYIKwYBBQUH
+# AwgweQYIKwYBBQUHAQEEbTBrMCQGCCsGAQUFBzABhhhodHRwOi8vb2NzcC5kaWdp
+# Y2VydC5jb20wQwYIKwYBBQUHMAKGN2h0dHA6Ly9jYWNlcnRzLmRpZ2ljZXJ0LmNv
+# bS9EaWdpQ2VydEFzc3VyZWRJRFJvb3RDQS5jcnQwgYEGA1UdHwR6MHgwOqA4oDaG
+# NGh0dHA6Ly9jcmw0LmRpZ2ljZXJ0LmNvbS9EaWdpQ2VydEFzc3VyZWRJRFJvb3RD
+# QS5jcmwwOqA4oDaGNGh0dHA6Ly9jcmwzLmRpZ2ljZXJ0LmNvbS9EaWdpQ2VydEFz
+# c3VyZWRJRFJvb3RDQS5jcmwwUAYDVR0gBEkwRzA4BgpghkgBhv1sAAIEMCowKAYI
+# KwYBBQUHAgEWHGh0dHBzOi8vd3d3LmRpZ2ljZXJ0LmNvbS9DUFMwCwYJYIZIAYb9
+# bAcBMA0GCSqGSIb3DQEBCwUAA4IBAQBxlRLpUYdWac3v3dp8qmN6s3jPBjdAhO9L
+# hL/KzwMC/cWnww4gQiyvd/MrHwwhWiq3BTQdaq6Z+CeiZr8JqmDfdqQ6kw/4stHY
+# fBli6F6CJR7Euhx7LCHi1lssFDVDBGiy23UC4HLHmNY8ZOUfSBAYX4k4YU1iRiSH
+# Y4yRUiyvKYnleB/WCxSlgNcSR3CzddWThZN+tpJn+1Nhiaj1a5bA9FhpDXzIAbG5
+# KHW3mWOFIoxhynmUfln8jA/jb7UBJrZspe6HUSHkWGCbugwtK22ixH67xCUrRwII
+# fEmuE7bhfEJCKMYYVs9BNLZmXbZ0e/VWMyIvIjayS6JKldj1po5SMYIEBDCCBAAC
+# AQEwLzAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0AhBkA8KQDEfOnE6+h4RS
+# u4uIMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqG
+# SIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3
+# AgEVMCMGCSqGSIb3DQEJBDEWBBT199EH52e0cs5p4w84nC2ZvWJqnjANBgkqhkiG
+# 9w0BAQEFAASCAQCkY8WalVttYNLSAPIzj2ZygAIkarl/4tb+QgE/YuIxxkwNbVMD
+# qOoKOirY4o1xkSYvcCyijlymNQD+6vuKo3Mtx/qwtpI0wA+BEPOp4jJHSS12GU1Q
+# /G2tPhUYEQh2R2RJLFmFEU5lAT/znw1QgPtGWEigkJGinVkyw1f/QFAHn4OBxFcz
+# //PHKeia00rzhCE9vAZeA5hruKQfwJxgqcGiroEsqi1nquo4SLKAL2saUaRSIKku
+# 5vJ7S83lQZqPHWeZB9fxnNIPMWefQJScIgsFHPKpf4L94GRoDLhLHeKVqstieDLz
+# HdNczUF9hn8+H9u6g9Ng4M6kbHI/kX3NNgBloYICMDCCAiwGCSqGSIb3DQEJBjGC
+# Ah0wggIZAgEBMIGGMHIxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJ
+# bmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0
+# IFNIQTIgQXNzdXJlZCBJRCBUaW1lc3RhbXBpbmcgQ0ECEA1CSuC+Ooj/YEAhzhQA
+# 8N0wDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwG
+# CSqGSIb3DQEJBTEPFw0yMTEyMDIxMzU2NDlaMC8GCSqGSIb3DQEJBDEiBCDSj16l
+# IrkEZ5H3RcU7zq2Ltb3ncLfZDhRQAMZWwGGkiDANBgkqhkiG9w0BAQEFAASCAQAE
+# +P0NL6JBiFuFEZ27LDeKX75q9B9aECHKgQCnj7nRH520L9AFrpSWRvduqsi8w9au
+# j1mtR3QJxUlYvfWaZ+0ozJltufMz0OjsJLvvIzo+V/gBtcANuHQC5H/x82hTrBPi
+# ePB4U5bUG3+598nP0p6xE325+DEGE/P0uIXcIYi8G+zcczWAVHn1a1KBS/KuviRh
+# pnqpGCfbMHKbYvSdT9pHKoZzdBFhYS7Pev/+aq4+XsUWdjG/H8P5m0cTChtMVQvQ
+# of0a97iUqXUl3C1qhMpSSqN8b3nnmfN8djBOkO5tdqavf19px3nCAT/wVo+ZZNco
+# e+5Q0iYl92X+bpNZOxax
+# SIG # End signature block
