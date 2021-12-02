@@ -32,14 +32,12 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		$scriptCert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Subject -eq 'CN=DKScriptSelfCert' }
 		if (-not $scriptCert) {
 			$authenticode = New-SelfSignedCertificate -Subject 'DKScriptSelfCert' -CertStoreLocation Cert:\LocalMachine\My -Type CodeSigningCert
-			$rootStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('Root', 'LocalMachine')
-			$rootStore.Open('ReadWrite')
-			$rootStore.Add($authenticode)
-			$rootStore.Close()
-			$publisherStore = [System.Security.Cryptography.X509Certificates.X509Store]::new('TrustedPublisher', 'LocalMachine')
-			$publisherStore.Open('ReadWrite')
-			$publisherStore.Add($authenticode)
-			$publisherStore.Close()
+			foreach($store in @('Root', 'TrustedPublisher')) {
+				$Cert = [System.Security.Cryptography.X509Certificates.X509Store]::new($store, 'LocalMachine')
+				$Cert.Open('ReadWrite')
+				$Cert.Add($authenticode)
+				$Cert.Close()
+			}
 		}
 		$scriptCert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Subject -eq 'CN=DKScriptSelfCert' }
 		Set-AuthenticodeSignature "$PSScriptRoot/!MakeNew.ps1" -Certificate $scriptCert -TimeStampServer 'http://timestamp.digicert.com' | Out-Null
@@ -68,15 +66,9 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	Add-Type -AssemblyName System.Windows.Forms | Out-Null
 
 	Write-Host "`tBOOTSTRAP starting, please wait..." -ForegroundColor Red -NoNewline
-	[Environment]::SetEnvironmentVariable('CommonLibSSEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('DKUtilPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('SkyrimSEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('SkyrimAEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('MO2SkyrimSEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('MO2SkyrimAEPath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('SKSETemplatePath', $null, 'Machine')
-	[Environment]::SetEnvironmentVariable('SKSEPluginAuthor', $null, 'Machine')
+	foreach ($env in @('CommonLibSSEPath', 'CustomCommonLibSSEPath', 'DKUtilPath', 'SkyrimSEPath', 'SkyrimAEPath', 'MO2SkyrimSEPath', 'MO2SkyrimAEPath', 'SKSETemplatePath', 'SKSEPluginAuthor')) {
+		[Environment]::SetEnvironmentVariable($env, $null, 'Machine')
+	}
 	Write-Host "`r`tBOOTSTRAP initiated!               " -ForegroundColor Yellow
 
 	function Initialize-Repo {
@@ -90,6 +82,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 
 		if (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
 			Write-Host "`n`t* Located local $RepoName   " -ForegroundColor Green
+			& git checkout -f master -q
 		} else {
 			Remove-Item "$PSScriptRoot/$Path" -Recurse -Force -Confirm:$false -ErrorAction Ignore
 			Write-Host "`n`t- Bootstrapping $RepoName..." -ForegroundColor Yellow -NoNewline
@@ -324,7 +317,7 @@ configure_file(
 )
 
 '@
-$Trail += "add_subdirectory(`"$Resolved`" `"Build/CLib`")`n"
+$Trail += "add_subdirectory(`"$Resolved`" `"CLib`")`n"
 $Trail += "message(CHECK_PASS `"Complete`")`n`n"
 
 # clib dependencies
@@ -345,12 +338,13 @@ Write-Host "`tBuilding CMake targets..."
 	$Trail += "set(GROUP $_)`n`n"
 	Get-ChildItem $_ -Directory -Exclude ('*CommonLibSSE*','*Template*') -Recurse | Resolve-Path -Relative | ForEach-Object {
 		if (Test-Path "$PSScriptRoot/$_/CMakeLists.txt" -PathType Leaf) {
+			$vcpkg = [IO.File]::ReadAllText("$PSScriptRoot/$_/vcpkg.json") | ConvertFrom-Json
+			$Dependencies += $vcpkg.'dependencies'
+
 			$projectDir = $_.Substring(2) -replace '\\', '/'
 			$Trail += "message(CHECK_START `"Rebuilding $projectDir`")`n"
 			$Trail += "add_subdirectory(`"$projectDir`")`n"
 			$Trail += "message(CHECK_PASS `"Complete`")`n`n"
-			$vcpkg = [IO.File]::ReadAllText("$PSScriptRoot/$_/vcpkg.json") | ConvertFrom-Json
-			$Dependencies += $vcpkg.'dependencies'
 		}
 	}
 }
@@ -382,8 +376,12 @@ $CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot | ForEach-Object {
 		Write-Host "`t`t! [Building] $CurProject" -ForegroundColor Yellow -NoNewline
 	} elseif ($_.StartsWith('-- Rebuilding ') -and $_.EndsWith(' - Complete')) {
 		Write-Host "`r`t`t* [Complete] $CurProject               " -ForegroundColor Cyan
+		if (Test-Path "$PSScriptRoot/Build/$CurProject/version.rc") {
+			$vcpkg = [IO.File]::ReadAllText("$PSScriptRoot/$CurProject/vcpkg.json") | ConvertFrom-Json
+			$VersionRC = [IO.File]::ReadAllText("$PSScriptRoot/Build/$CurProject/version.rc") -replace 'VALUE "FileDescription", "ArmorRatingRescaledRemake"', "VALUE `"FileDescription`", `"$($vcpkg.'description')`""
+			[IO.File]::WriteAllText("$PSScriptRoot/Build/$CurProject/version.rc", $VersionRC)
+		}
 	}
-
 	$_
 }
 

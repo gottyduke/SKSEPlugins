@@ -31,7 +31,7 @@ function Resolve-Files {
                 Get-ChildItem "$a_parent/$directory" -Recurse -File -Include $a_extention -Exclude Version.h -ErrorAction SilentlyContinue | Resolve-Path -Relative | ForEach-Object {
                     Write-Host "`t`t<$_>"
                     $file = $_.SubString(2).Insert(0, "`n`t") -replace '\\', '/' # \\/\//\/\\/\\\/\\/?!?
-                    $_generated = $_generated + $file
+                    $_generated += $file
                 }
             }
         } finally {
@@ -41,8 +41,6 @@ function Resolve-Files {
         return $_generated
     }
 }
-
-
 
 # project path
 $Folder = $PSScriptRoot | Split-Path -Leaf
