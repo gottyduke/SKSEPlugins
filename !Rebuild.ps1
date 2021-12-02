@@ -19,7 +19,7 @@ $env:BuildTarget = $Mode1
 
 Write-Host "`tDKScriptVersion $env:DKScriptVersion`t$Mode0`t$Mode1`n"
 
-# BOOTSTRAP
+# @@BOOTSTRAP
 if ($Mode0 -eq 'BOOTSTRAP') {
 	if (-not $admin) {
 		Write-Host "`tExecute with admin privilege to continue!" -ForegroundColor Red
@@ -59,7 +59,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 				Write-Host "`r`t* Located local $RepoName, mapping latest" -ForegroundColor Green
 			} else {
 				Remove-Item "$PSScriptRoot/$Path" -Recurse -Force -Confirm:$false -ErrorAction Ignore
-				Write-Host "`t- Bootstrapping $EnvName..." -ForegroundColor Yellow -NoNewline
+				Write-Host "`r`t- Bootstrapping $EnvName..." -ForegroundColor Yellow -NoNewline
 				& git clone $RemoteUrl $Path -q
 				Write-Host "`r`t- Installed $RepoName, mapping path" -ForegroundColor Green
 			}
@@ -226,7 +226,7 @@ $CMakeLists
 [string[]]$Dependencies
 $Triplet
 
-# build configuration
+# @@Build Config
 if ($Mode0 -eq 'MT') {
 	$Header += "FALSE CACHE BOOL `"`")`n"
 	$Triplet = "x64-windows-static"
@@ -247,7 +247,7 @@ if ($Mode0 -eq 'MT') {
 	Exit
 }
 
-# build target
+# @@Build Target
 if ($Mode1 -eq 'AE' -and $env:SkyrimAEPath) {
 	Write-Host "`tTarget: Anniversary Edition" -ForegroundColor Yellow
 	$IsAE = 'TRUE'
@@ -256,48 +256,51 @@ if ($Mode1 -eq 'AE' -and $env:SkyrimAEPath) {
 	$IsAE = 'FALSE'
 } else {
 	Write-Host "`tUnknown game version specified!`n`tOR:`n`tIncorrect BOOTSTRAP" -ForegroundColor Red
-	Pop-Location
 	Exit
 }
 
-# clib integration
+# @@Custom CLib 0
+$Resolved = ""
 if (($CustomCLib -eq 0) -and (Test-Path "$env:CustomCommonLibSSEPath/CMakeLists.txt" -PathType Leaf)) {
 	Write-Host "`t==> Rebasing custom CLib <==" -ForegroundColor Red
-	Write-Host "`tCLib version override is OFF" -ForegroundColor Red
-	$env:CommonLibSSEPath = $env:CustomCommonLibSSEPath
-	$Resolved = ((Resolve-Path $env:CommonLibSSEPath -Relative) + (" $PSScriptRoot/Build/CLib")) -replace '\\', '/'
 	$Trail += "message(CHECK_START `"Rebuilding CustomCommonLib`")`n"
-	$Trail += "add_subdirectory($Resolved)`n`n"
+	$Resolved = (Resolve-Path $env:CustomCommonLibSSEPath -Relative) -replace '\\', '/'
 } else {
+	if (Test-Path "$env:CommonLibSSEPath/CMakeLists.txt" -PathType Leaf) {
+		Push-Location $env:CommonLibSSEPath
+		try {
+			if ($Mode1 -eq 'AE') {
+				Write-Host "`t==> Rebasing latest CLib <==" -ForegroundColor Green
+				$Trail += "`nmessage(CHECK_START `"Rebuilding LatestCommonLib`")`n"
+				& git checkout -f master -q
+			} elseif ($Mode1 -eq 'SE') {
+				Write-Host "`t==> Rebasing legacy CLib <==" -ForegroundColor Green
+				$Trail += "`nmessage(CHECK_START `"Rebuilding LegacyCommonLib`")`n"
+				& git checkout -f 575f84a -q
+			}
+		} finally {
+			Pop-Location
+		}
+		$Resolved = (Resolve-Path $env:CommonLibSSEPath -Relative) -replace '\\', '/'
+	} else {
+		Write-Host "`t==> Rebasing default CLib failed <==`n`tCommonLibSSEPath not set or incorrect" -ForegroundColor Red
+		Exit
+	}
+}
+$Trail += 'set($ENV{CommonLibSSEPath} '
+$Trail += "`"$Resolved`")`n"
 # use custom CMakeLists for CommonLibSSE
-	$Trail += @'
+$Trail += @'
 
 configure_file(
 	$ENV{DKUtilPath}/cmake/CLibCustomCMakeLists.txt.in
 	$ENV{CommonLibSSEPath}/CMakeLists.txt
 	COPYONLY
 )
+
 '@
-	
-	if (Test-Path "$env:CommonLibSSEPath/CMakeLists.txt" -PathType Leaf) {
-		Push-Location $env:CommonLibSSEPath
-		if ($Mode1 -eq 'AE') {
-			Write-Host "`t==> Rebasing latest CLib <==" -ForegroundColor Green
-			$Trail += "`nmessage(CHECK_START `"Rebuilding LatestCommonLib`")`n"
-			& git checkout -f master -q
-		} elseif ($Mode1 -eq 'SE') {
-			Write-Host "`t==> Rebasing legacy CLib <==" -ForegroundColor Green
-			$Trail += "`nmessage(CHECK_START `"Rebuilding LegacyCommonLib`")`n"
-			& git checkout -f 575f84a -q
-		}
-		Pop-Location
-	} else {
-		Write-Host "`t==> Rebasing default CLib failed <==`n`tCommonLibSSEPath not set or incorrect" -ForegroundColor Red
-		Exit
-	}
-}
-$Trail += 'add_subdirectory($ENV{CommonLibSSEPath} CLib)'
-$Trail += "`nmessage(CHECK_PASS `"Complete`")`n"
+$Trail += "add_subdirectory(`"$Resolved`" `"Build/CLib`")`n"
+$Trail += "message(CHECK_PASS `"Complete`")`n`n"
 
 # clib dependencies
 $vcpkg = [IO.File]::ReadAllText("$env:CommonLibSSEPath/vcpkg.json") | ConvertFrom-Json
@@ -313,13 +316,13 @@ Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction I
 # manage all sub projects
 Write-Host "`tBuilding CMake targets..."
 @('Library', 'Plugins') | ForEach-Object {
-	$Trail += "`nset(GROUP $_)`n"
+	$Trail += "set(GROUP $_)`n`n"
 	Get-ChildItem $_ -Directory -Exclude ('*CommonLibSSE*','*Template*') -Recurse | Resolve-Path -Relative | ForEach-Object {
 		if (Test-Path "$PSScriptRoot/$_/CMakeLists.txt" -PathType Leaf) {
 			$projectDir = $_.Substring(2) -replace '\\', '/'
 			$Trail += "message(CHECK_START `"Rebuilding $projectDir`")`n"
 			$Trail += "add_subdirectory(`"$projectDir`")`n"
-			$Trail += "message(CHECK_PASS `"Complete`")`n"
+			$Trail += "message(CHECK_PASS `"Complete`")`n`n"
 			$vcpkg = [IO.File]::ReadAllText("$PSScriptRoot/$_/vcpkg.json") | ConvertFrom-Json
 			$Dependencies += $vcpkg.'dependencies'
 		}
