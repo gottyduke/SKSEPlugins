@@ -61,6 +61,9 @@ if ($Mode -eq 'COPY') { # post build event
         $GameBase = $env:SkyrimSEPath
         $MO2 = $env:MO2SkyrimSEPath
         Write-Host "`t$Folder $Version | SPECIAL EDITION"
+    } else {
+        Write-Host "`tUnknown build target specified!"
+        Exit
     }
 
     # MO2 support
@@ -70,7 +73,7 @@ if ($Mode -eq 'COPY') { # post build event
         Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
         $Result = [Microsoft.VisualBasic.Interaction]::MsgBox("$Project has been built`n`nCopy to game folder?", 52, $Project)
         if ($Result -eq 6) {
-            $Destination = "$GameBase/Data" 
+            $Destination = Join-Path "$GameBase" "Data" 
         } else {
             Invoke-Item $Path
             Exit
