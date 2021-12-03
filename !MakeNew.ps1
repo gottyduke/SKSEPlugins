@@ -2,7 +2,7 @@
 param (
     [Parameter(Mandatory)][string]$Name,
     [Alias('message', 'm')][string]$Description,
-    [Alias('install', 'i')][string]$Destination,
+    [Alias('install', 'i')][string]$Destination = $Name,
     [Alias('vcpkg', 'v')][string[]]$AddDependencies = @()
 )
 
@@ -63,11 +63,7 @@ if ($AddDependencies) {
     $Json.'dependencies' += $AddDependencies
     $Json.'dependencies' = $Json.'dependencies' | Select-Object -Unique | Sort-Object
 }
-if ($Destination) {
-    $Json.'install-name' = $Destination
-} else {
-    $Json.'install-name' = $Name
-}
+$Json.'install-name' = $Destination
 $Json = $Json | ConvertTo-Json
 [IO.File]::WriteAllText("$Path/$Name/vcpkg.json", $Json)
 

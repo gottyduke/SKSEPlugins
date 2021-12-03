@@ -67,50 +67,57 @@ if ($Mode -eq 'COPY') { # post build event
     if ($MO2) {
         $Destination = Join-Path "$MO2/mods" $vcpkg.'install-name'
         New-Item -Type Directory "$Destination/SKSE/Plugins" -Force | Out-Null
-        
-        # binary
-        Write-Host "`tCopying binary file..."
-        Copy-Item "$Path/$Project.dll" "$Destination/SKSE/Plugins/$Project.dll" -Force
-        Write-Host "`tDone!"
-
-        # configs
-        Get-ChildItem "$PSScriptRoot" -Filter '*.ini,*json,*.toml' | ForEach-Object {
-            Write-Host "`tCopying $($_.Name)"
-            Copy-Item "$PSScriptRoot/$($_.Name)" "$Destination/SKSE/Plugins/$($_.Name)" -Force
+    } else {
+        Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
+        $Result = [Microsoft.VisualBasic.Interaction]::MsgBox("$Project has been built`n`nCopy to game folder?", 52, $Project)
+        if ($Result -eq 6) {
+            $Destination = "$GameBase/Data" 
+        } else {
+            Invoke-Item $Path
+            Exit
         }
+    }
+       
+    # binary
+    Write-Host "`tCopying binary file..."
+    Copy-Item "$Path/$Project.dll" "$Destination/SKSE/Plugins/$Project.dll" -Force
+    Write-Host "`tDone!"
 
-        # papyrus
-        if (Test-Path "$PSScriptRoot/Scripts/Source/*.psc" -PathType Leaf) {
-            Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
-            $Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Build papyrus scripts?', 52, 'Papyrus')
-            if ($Result -eq 6) {
-                Write-Host "`tBuilding papyrus scripts..."
-                New-Item -Type Directory "$Destination/Scripts" -Force | Out-Null
-                & "$GameBase/Papyrus Compiler/PapyrusCompiler.exe" "$PSScriptRoot/Scripts/Source" -f="$GameBase/Papyrus Compiler/TESV_Papyrus_Flags.flg" -i="$GameBase/Data/Scripts/Source;./Scripts/Source" -o="$PSScriptRoot/Scripts" -a
+    # configs
+    Get-ChildItem $PSScriptRoot -Recurse | Where-Object {($_.extension -in '.toml', '.json', '.toml') -and ($_.Name -ne 'vcpkg.json')} | ForEach-Object {
+        Write-Host "`tCopying $($_.Name)"
+        Copy-Item $_.FullName "$Destination/SKSE/Plugins/$($_.Name)" -Force
+    }
 
-                Write-Host "`tCopying papyrus scripts..."
-                Copy-Item "$PSScriptRoot/Scripts" "$Destination" -Recurse -Force
-                Remove-Item "$Destination/Scripts/Source" -Force -Confirm:$false -ErrorAction Ignore
-                Write-Host "`tDone!"
-            }
-        }
-        
-        # shockwave
-        if (Test-Path "$PSScriptRoot/Interface/*.swf" -PathType Leaf) {
-            Write-Host "`tCopying shockwave files..."
-            New-Item -Type Directory "$Destination/Interface" -Force | Out-Null
-            Copy-Item "$PSScriptRoot/Interface" "$Destination" -Recurse -Force
+    # papyrus
+    if (Test-Path "$PSScriptRoot/Scripts/Source/*.psc" -PathType Leaf) {
+        Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
+        $Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Build papyrus scripts?', 52, 'Papyrus')
+        if ($Result -eq 6) {
+            Write-Host "`tBuilding papyrus scripts..."
+            New-Item -Type Directory "$Destination/Scripts" -Force | Out-Null
+            & "$GameBase/Papyrus Compiler/PapyrusCompiler.exe" "$PSScriptRoot/Scripts/Source" -f="$GameBase/Papyrus Compiler/TESV_Papyrus_Flags.flg" -i="$GameBase/Data/Scripts/Source;./Scripts/Source" -o="$PSScriptRoot/Scripts" -a
+
+            Write-Host "`tCopying papyrus scripts..."
+            Copy-Item "$PSScriptRoot/Scripts" "$Destination" -Recurse -Force
+            Remove-Item "$Destination/Scripts/Source" -Force -Confirm:$false -ErrorAction Ignore
             Write-Host "`tDone!"
         }
-    } else {
-        Invoke-Item $Path
+    }
+    
+    # shockwave
+    if (Test-Path "$PSScriptRoot/Interface/*.swf" -PathType Leaf) {
+        Write-Host "`tCopying shockwave files..."
+        New-Item -Type Directory "$Destination/Interface" -Force | Out-Null
+        Copy-Item "$PSScriptRoot/Interface" "$Destination" -Recurse -Force
+        Write-Host "`tDone!"
     }
 
     # Check CMake VERSION
     $OutputVersion
     $OriginalVersion = $vcpkg.'version-string'
-    $BuildFolder = Get-ChildItem ((Get-Item $Path).Parent.Parent.FullName) $Project -Recurse -Directory
-    [IO.File]::ReadAllLines("$($BuildFolder.FullName)/include/Version.h") | ForEach-Object {
+    $BuildFolder = Get-ChildItem ((Get-Item $Path).Parent.Parent.FullName) "$Project.sln" -Recurse -File
+    [IO.File]::ReadAllLines("$($BuildFolder.Directory)/include/Version.h") | ForEach-Object {
         if ($_.Trim().StartsWith('inline constexpr auto NAME = "')) {
             $OutputVersion = $_.Trim().Substring(30, 5)
             if ($OutputVersion -ne $vcpkg.'version-string') {
@@ -174,7 +181,7 @@ if ($Mode -eq 'COPY') { # post build event
     ((Get-ChildItem 'Plugins' -Directory -Recurse) + (Get-ChildItem 'Library' -Directory -Recurse)) | Resolve-Path -Relative | ForEach-Object {
         if (Test-Path "$_/CMakeLists.txt" -PathType Leaf) {
             Write-Host "`tUpdated <$_>"
-            Robocopy.exe '.' "$_" '!Update.ps1' /MT /NJS /NFL /NDL /NJH
+            Robocopy.exe "$PSScriptRoot" "$_" '!Update.ps1' /MT /NJS /NFL /NDL /NJH
         }
     }
 }

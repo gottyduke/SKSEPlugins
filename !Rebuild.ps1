@@ -57,9 +57,6 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			Write-Host "`tUpdated ExecutionPolicy to [RemoteSigned] on [LocalMachine]"
 			Set-ExecutionPolicy RemoteSigned -Scope LocalMachine
 		}
-
-		& $PSCommandPath $Mode0 $Mode1
-		Exit
 	}
 
 	Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
@@ -376,11 +373,6 @@ $CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot | ForEach-Object {
 		Write-Host "`t`t! [Building] $CurProject" -ForegroundColor Yellow -NoNewline
 	} elseif ($_.StartsWith('-- Rebuilding ') -and $_.EndsWith(' - Complete')) {
 		Write-Host "`r`t`t* [Complete] $CurProject               " -ForegroundColor Cyan
-		if (Test-Path "$PSScriptRoot/Build/$CurProject/version.rc") {
-			$vcpkg = [IO.File]::ReadAllText("$PSScriptRoot/$CurProject/vcpkg.json") | ConvertFrom-Json
-			$VersionRC = [IO.File]::ReadAllText("$PSScriptRoot/Build/$CurProject/version.rc") -replace 'VALUE "FileDescription", "ArmorRatingRescaledRemake"', "VALUE `"FileDescription`", `"$($vcpkg.'description')`""
-			[IO.File]::WriteAllText("$PSScriptRoot/Build/$CurProject/version.rc", $VersionRC)
-		}
 	}
 	$_
 }
