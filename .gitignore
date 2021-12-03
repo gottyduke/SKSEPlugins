@@ -1,6 +1,12 @@
-
 vcpkg/
 Build/
 .vs/
 CMakeLists.txt
-ATASignature.ps1
+PluginTutoiralCN/
+!Plugins
+Plugins/*
+!Plugins/Template
+!Library
+Library/*
+!Library/CommonLibSSE
+!Library/DKUtil
