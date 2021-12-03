@@ -154,7 +154,12 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	Write-Host "`t>>> Checking out requirements... <<<" -ForegroundColor Yellow
 
 	# VCPKG_ROOT
-	Initialize-Repo 'VCPKG_ROOT' 'VCPKG' 'vcpkg.exe' 'vcpkg' 'https://github.com/microsoft/vcpkg' 
+	Initialize-Repo 'VCPKG_ROOT' 'VCPKG' 'vcpkg.exe' 'vcpkg' 'https://github.com/microsoft/vcpkg'
+	$env:VCPKG_ROOT = [System.Environment]::GetEnvironmentVariable('VCPKG_ROOT', 'Machine')
+	Start-Job {
+		& $env:VCPKG_ROOT\bootstrap-vcpkg.bat
+		& $env:VCPKG_ROOT\vcpkg.exe integrate install
+	} | Out-Null
 
 	# CommonLibSSEPath
 	Initialize-Repo 'CommonLibSSEPath' 'CommonLib' 'CMakeLists.txt' 'Library/CommonLibSSE' 'https://github.com/Ryan-rsm-McKenzie/CommonLibSSE'
@@ -199,10 +204,6 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	Write-Host "`n`t>>> Bootstrapping finishing up... <<<" -ForegroundColor Green
 	Get-Job | Wait-Job | Out-Null
 	Get-Job | Remove-Job | Out-Null
-
-	$env:VCPKG_ROOT = [System.Environment]::GetEnvironmentVariable('VCPKG_ROOT', 'Machine')
-	& $env:VCPKG_ROOT\bootstrap-vcpkg.bat | Out-Null
-	& $env:VCPKG_ROOT\vcpkg.exe integrate install | Out-Null
 
 	Write-Host "`n`tRestart current command line interface to complete BOOTSTRAP."
 	Exit
@@ -402,8 +403,8 @@ if ($CMake[-3] -eq '-- Configuring done') {
 # SIG # Begin signature block
 # MIIR2wYJKoZIhvcNAQcCoIIRzDCCEcgCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUkU4fV/5KE+kPc4fnEWCXGu4S
-# fB6ggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUc4JonWZ3z8Fg1GyN1rI2cTYd
+# ss6ggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
 # AQsFADAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0MB4XDTIxMTIwMjEyMzYz
 # MFoXDTIyMTIwMjEyNTYzMFowGzEZMBcGA1UEAwwQREtTY3JpcHRTZWxmQ2VydDCC
 # ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAL9d3xGpFZgLEPcI1mIG8OPB
@@ -477,23 +478,23 @@ if ($CMake[-3] -eq '-- Configuring done') {
 # AQEwLzAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0AhBkA8KQDEfOnE6+h4RS
 # u4uIMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqG
 # SIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3
-# AgEVMCMGCSqGSIb3DQEJBDEWBBQdcrBNnds1ZXvhpA2+u//cp4vvLzANBgkqhkiG
-# 9w0BAQEFAASCAQBO4VL/DFixZaLVDNuDX1TqQZ8G+9l673NbjbOIo1zT2cP7Kfyd
-# Z5aJq5S/HPOjxS9fcrVuXeqO0LroOsAR/B9aNhc4EjIPl8uPXZoH8hebNFg6mSmK
-# mcDMPy/13CS1LTAF1Jp6qaxKoxbdZXZJ9alNByA+mSXP4ZcXHr6e7jUBtbaGTn/U
-# VmSxJ4OM1rUuaPjt1/3l8sccztOznKyTNIz4G2lgiUyXVEQBpYCQOIOB7yGJmJPx
-# PS1tICEEL7L/ZHln+2iTfNNTdsRmdXuwZGiqnrKH1PL/4q9oX7WDSwH4fTJ+1tms
-# fqt7stk8t7DkyJHFqjtojvhpNyJj4WyunXLDoYICMDCCAiwGCSqGSIb3DQEJBjGC
+# AgEVMCMGCSqGSIb3DQEJBDEWBBSWiLVj7aOz4o0A0gYlM+X1HCA2mzANBgkqhkiG
+# 9w0BAQEFAASCAQCR1hkPOMCNzbTyptRYV5FzckqOTYe2JnGzgabxMwTFymZR5Yxa
+# 4XJLWSTv8dbi0xhONHXmYyVHsjhraX9BOG0ulz5blp/3Zvk3U2Mr5JkFewGIE8Vf
+# lGW+pB84OgXGl78iqtSTJeIfv6G9a8uVo2ZG1iNsKeOVJ4Es0hz7cZh/Qd2C8DsV
+# ylVX+0PzqmZp6wLR/kWcPwRcc2FoqK52ZHcII35TeZ186qozSgQjChWNYG9ITlHm
+# mDPjplJkwoRtoHr9f/6D5bQkzrPNYdq9tGJ+zFNgx0F6xGUOWYg8LIGoUFXCzJ8W
+# Gg4niYzynY94cRU0T3iyW5rEQckUA3nFvy08oYICMDCCAiwGCSqGSIb3DQEJBjGC
 # Ah0wggIZAgEBMIGGMHIxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJ
 # bmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0
 # IFNIQTIgQXNzdXJlZCBJRCBUaW1lc3RhbXBpbmcgQ0ECEA1CSuC+Ooj/YEAhzhQA
 # 8N0wDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwG
-# CSqGSIb3DQEJBTEPFw0yMTEyMDMxNjUxMDZaMC8GCSqGSIb3DQEJBDEiBCD4o+s+
-# jRklc4KumfXCS9kMnCxKPWIxLYCdxRcp7CkdwTANBgkqhkiG9w0BAQEFAASCAQBk
-# uVT0saYyg8QCYrvV6ZumJBax9CSdLtO2vpSjA2QYA77m1rMntt7SqJhoLHhiNIy/
-# /5sbsP/eWvwtICv9favgLypuqvEJ+l7T3qdKPiezuEWqlC+JTlmJyPqVnMx/PmG8
-# QrUEjvd++1FoYQDgF6Na3Majmj0MOl0nEulP8X2rLK3IvaIZ5brdAz6ga7/w1g/H
-# QW7/36Mjvlpe+z0x9Vf3h0WHfVrlcgj6rCZTyvbooHeS1J3Aim7lUAKurL8x4ehS
-# yBf3UEXi4w/xWm2r9tu8lGroGSiQMl7G7OCxg0JVDKJz/QgghyeOb/VU/O3xpHFn
-# D9T+JXfjCsygs/k21hZe
+# CSqGSIb3DQEJBTEPFw0yMTEyMDMxNzIxNTFaMC8GCSqGSIb3DQEJBDEiBCCqMTOE
+# GTGLd0k1amVTurQ3VT2BRgdEVHeitxpRAxGsWzANBgkqhkiG9w0BAQEFAASCAQBO
+# Vyvrm42PrFX9L4K4j3l2UsDBsUdvDKeA0LuYOZGwidFXAc45eydwUrzfaykkgKrs
+# PEAg2FwU0PKHLloNHVQcL4iGK2cLadFFA4A83ZNSFAoqOjsV51XZ9AeCptvXIlL2
+# P1NCIEXirDCuS9ZjGKSYJWbVuLbLrGq2EqN5etaS3ZqjwPCcLoFuYH3ScI1YOyfF
+# 7iUi/RkblXq50/AQmvzj0kSdYXnyXaw9HubjArNTEsWScer8Gg9v9pccTtSKBbWw
+# byU5vFXzz95eKtQ5EHzYlgRVOFLxZmWXJ1J++ZLWP7yJJqbCpansA06MIv7cPFKR
+# HCgDRse4nzECOMW6Br6/
 # SIG # End signature block
