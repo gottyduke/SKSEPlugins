@@ -13,7 +13,7 @@ $currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Pri
 $admin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 $env:RebuildInvoke = $true
-$env:DKScriptVersion = '11201'
+$env:DKScriptVersion = '11203'
 $env:BuildConfig = $Mode0
 $env:BuildTarget = $Mode1
 
@@ -76,21 +76,28 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			[string]$Path,
 			[string]$RemoteUrl
 		)
-
-		if (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
+		
+		$CurrentEnv = [System.Environment]::GetEnvironmentVariable($EnvName, 'Machine')
+		if (Test-Path "$CurrentEnv/$Token" -PathType Leaf) {
+			Write-Host "`n`t* Checked out $RepoName" -ForegroundColor Green
+		} elseif (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
 			Write-Host "`n`t* Located local $RepoName   " -ForegroundColor Green
-			& git checkout -f master -q
+			Push-Location $Path
+			try {
+				& git checkout -f master -q
+			} finally {
+				Pop-Location
+			}
 		} else {
 			Remove-Item "$PSScriptRoot/$Path" -Recurse -Force -Confirm:$false -ErrorAction Ignore
 			Write-Host "`n`t- Bootstrapping $RepoName..." -ForegroundColor Yellow -NoNewline
 			& git clone $RemoteUrl $Path -q
 			Write-Host "`r`t- Installed $RepoName               " -ForegroundColor Green
+			Write-Host "`t`t- Mapping path, please wait..." -NoNewline
+			$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
+			[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
+			Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
 		}
-	
-		Write-Host "`t`t- Mapping path, please wait..." -NoNewline
-		$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
-		[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
-		Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
 	}
 
 	function Find-Game {
@@ -387,8 +394,8 @@ if ($CMake[-3] -eq '-- Configuring done') {
 # SIG # Begin signature block
 # MIIR2wYJKoZIhvcNAQcCoIIRzDCCEcgCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUREOIk+zALJarcg0hGBmA+6SL
-# xtWggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUEFNwbtMTfPXyhR+1V68+q4WL
+# ugCggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
 # AQsFADAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0MB4XDTIxMTIwMjEyMzYz
 # MFoXDTIyMTIwMjEyNTYzMFowGzEZMBcGA1UEAwwQREtTY3JpcHRTZWxmQ2VydDCC
 # ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAL9d3xGpFZgLEPcI1mIG8OPB
@@ -462,23 +469,23 @@ if ($CMake[-3] -eq '-- Configuring done') {
 # AQEwLzAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0AhBkA8KQDEfOnE6+h4RS
 # u4uIMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqG
 # SIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3
-# AgEVMCMGCSqGSIb3DQEJBDEWBBT199EH52e0cs5p4w84nC2ZvWJqnjANBgkqhkiG
-# 9w0BAQEFAASCAQCkY8WalVttYNLSAPIzj2ZygAIkarl/4tb+QgE/YuIxxkwNbVMD
-# qOoKOirY4o1xkSYvcCyijlymNQD+6vuKo3Mtx/qwtpI0wA+BEPOp4jJHSS12GU1Q
-# /G2tPhUYEQh2R2RJLFmFEU5lAT/znw1QgPtGWEigkJGinVkyw1f/QFAHn4OBxFcz
-# //PHKeia00rzhCE9vAZeA5hruKQfwJxgqcGiroEsqi1nquo4SLKAL2saUaRSIKku
-# 5vJ7S83lQZqPHWeZB9fxnNIPMWefQJScIgsFHPKpf4L94GRoDLhLHeKVqstieDLz
-# HdNczUF9hn8+H9u6g9Ng4M6kbHI/kX3NNgBloYICMDCCAiwGCSqGSIb3DQEJBjGC
+# AgEVMCMGCSqGSIb3DQEJBDEWBBRsA4MN7LPv9mUk+ex4MjWOAdRinjANBgkqhkiG
+# 9w0BAQEFAASCAQByR1pcJv941oYzLy2WWUtkT4ZfXQmp9lyQt0DDLRRkPR/v6mTq
+# F1r2yt4apXp5XvD10WP+SRWkpvItEQoYdcb09N9sBH59KX+riBDmNdFOKcSAks/z
+# EYnjSbwC4/gcNhv1y9sAOm0XhHsZKi/CgNBg8fKLEsL5ia+VaxJMmX3gsV8qom4o
+# MRXJkT/+P5CnosuGpHvWDmhsucev6mGrDArCf33mCgalKuoTmhdD3WtAxOyB2KI4
+# 6YI1JdxRNGWTezm3roZDkYjjaxuUzjzutaxuoA0MD8WA3kzGr3BkuQLCqQRwHBMc
+# CnrzQrAsYKxJlf+1WV0mIcdOqrbXQCFt3knnoYICMDCCAiwGCSqGSIb3DQEJBjGC
 # Ah0wggIZAgEBMIGGMHIxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJ
 # bmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0
 # IFNIQTIgQXNzdXJlZCBJRCBUaW1lc3RhbXBpbmcgQ0ECEA1CSuC+Ooj/YEAhzhQA
 # 8N0wDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwG
-# CSqGSIb3DQEJBTEPFw0yMTEyMDIxMzU2NDlaMC8GCSqGSIb3DQEJBDEiBCDSj16l
-# IrkEZ5H3RcU7zq2Ltb3ncLfZDhRQAMZWwGGkiDANBgkqhkiG9w0BAQEFAASCAQAE
-# +P0NL6JBiFuFEZ27LDeKX75q9B9aECHKgQCnj7nRH520L9AFrpSWRvduqsi8w9au
-# j1mtR3QJxUlYvfWaZ+0ozJltufMz0OjsJLvvIzo+V/gBtcANuHQC5H/x82hTrBPi
-# ePB4U5bUG3+598nP0p6xE325+DEGE/P0uIXcIYi8G+zcczWAVHn1a1KBS/KuviRh
-# pnqpGCfbMHKbYvSdT9pHKoZzdBFhYS7Pev/+aq4+XsUWdjG/H8P5m0cTChtMVQvQ
-# of0a97iUqXUl3C1qhMpSSqN8b3nnmfN8djBOkO5tdqavf19px3nCAT/wVo+ZZNco
-# e+5Q0iYl92X+bpNZOxax
+# CSqGSIb3DQEJBTEPFw0yMTEyMDMxMjQwMjlaMC8GCSqGSIb3DQEJBDEiBCCJ8MbI
+# ubalLYWOly3cbhyBLGGMnd6ogIcvNuaAgOPtbzANBgkqhkiG9w0BAQEFAASCAQBY
+# HBHWQqWeGVfdq8M5yqZ0U/zbrNgWLdTSHLeji3NRRMQTzucwMeuqAWtNx0lLM26x
+# YCJ3b8FJlL5pvrrsS8wY3Lw32UhcGilIqrn0wFdYWllvuqKPr4xqvvLurbnjcGqz
+# O5HhNQ/MkgNyY2qMgdh4XEqylenrj8nkmWb5+B1fgEzgOOn/6vh56qn2m63S66KY
+# lj1Uj2ykWpcDY3pgPcL0P+hce6lDaVPS2tQi9+qazo8mYKBD36IKtlobJh+LMrk9
+# rmOfCb2FA1Dog3VUmEm47hCPB+bnAj4qHdegmZ4iCvwYKR9sYsoI19kTUbDn4sZB
+# uA8MC5V2/gsJ+FQCSf9M
 # SIG # End signature block
