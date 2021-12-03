@@ -1,9 +1,0 @@
-[submodule "Library/DKUtil"]
-	path = Library/DKUtil
-	url = https://github.com/gottyduke/DKUtil
-[submodule "Plugins/Template"]
-	path = Plugins/Template
-	url = https://github.com/gottyduke/Template
-[submodule "Library/CommonLibSSE"]
-	path = Library/CommonLibSSE
-	url = https://github.com/Ryan-rsm-McKenzie/CommonLibSSE
