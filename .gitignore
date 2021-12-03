@@ -3,5 +3,10 @@ Build/
 .vs/
 CMakeLists.txt
 PluginTutoiralCN/
-Library/
-Plugins/
+!Plugins
+Plugins/*
+!Plugins/Template
+!Library
+Library/*
+!Library/CommonLibSSE
+!Library/DKUtil
