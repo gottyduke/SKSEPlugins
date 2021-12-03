@@ -151,8 +151,8 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 
 	# VCPKG_ROOT
 	Initialize-Repo 'VCPKG_ROOT' 'VCPKG' 'vcpkg.exe' 'vcpkg' 'https://github.com/microsoft/vcpkg' 
-	& .\vcpkg\bootstrap-vcpkg.bat | Out-Null
-	& .\vcpkg\vcpkg.exe integrate install | Out-Null
+	& $env:VCPKG_ROOT\bootstrap-vcpkg.bat | Out-Null
+	& $env:VCPKG_ROOT\vcpkg.exe integrate install | Out-Null
 
 	# CommonLibSSEPath
 	Initialize-Repo 'CommonLibSSEPath' 'CommonLib' 'CMakeLists.txt' 'Library/CommonLibSSE' 'https://github.com/Ryan-rsm-McKenzie/CommonLibSSE'
