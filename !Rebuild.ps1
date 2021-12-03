@@ -9,13 +9,13 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-$admin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-
 $env:RebuildInvoke = $true
 $env:DKScriptVersion = '11203'
 $env:BuildConfig = $Mode0
 $env:BuildTarget = $Mode1
+
+$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+$admin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
 
 Write-Host "`tDKScriptVersion $env:DKScriptVersion`t$Mode0`t$Mode1`n"
 
@@ -40,9 +40,9 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			}
 		}
 		$scriptCert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Subject -eq 'CN=DKScriptSelfCert' }
-		Set-AuthenticodeSignature "$PSScriptRoot/!MakeNew.ps1" -Certificate $scriptCert -TimeStampServer 'http://timestamp.digicert.com' | Out-Null
-		Set-AuthenticodeSignature "$PSScriptRoot/!Rebuild.ps1" -Certificate $scriptCert -TimeStampServer 'http://timestamp.digicert.com' | Out-Null
-		Set-AuthenticodeSignature "$PSScriptRoot/!Update.ps1" -Certificate $scriptCert -TimeStampServer 'http://timestamp.digicert.com' | Out-Null
+		@('!MakeNew.ps1', '!Rebuild.ps1', '!Update.ps1') | ForEach-Object {
+			Set-AuthenticodeSignature "$PSScriptRoot/$_" -Certificate $scriptCert -TimeStampServer 'http://timestamp.digicert.com' | Out-Null
+		}
 
 		$Signed = Get-AuthenticodeSignature "$PSScriptRoot\!Rebuild.ps1"
 		if ($Signed.Status -ne 'Valid') {
@@ -197,13 +197,12 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	Write-Host "`n`t* Plugin author: $Author" -ForegroundColor Magenta
 
 	Write-Host "`n`t>>> Bootstrapping finishing up... <<<" -ForegroundColor Green
-	Start-Job {
-		& $env:VCPKG_ROOT\bootstrap-vcpkg.bat
-		& $env:VCPKG_ROOT\vcpkg.exe integrate install
-	} | Out-Null
 	Get-Job | Wait-Job | Out-Null
 	Get-Job | Remove-Job | Out-Null
 
+	$env:VCPKG_ROOT = [System.Environment]::GetEnvironmentVariable('VCPKG_ROOT', 'Machine')
+	& $env:VCPKG_ROOT\bootstrap-vcpkg.bat | Out-Null
+	& $env:VCPKG_ROOT\vcpkg.exe integrate install | Out-Null
 
 	Write-Host "`n`tRestart current command line interface to complete BOOTSTRAP."
 	Exit
@@ -403,8 +402,8 @@ if ($CMake[-3] -eq '-- Configuring done') {
 # SIG # Begin signature block
 # MIIR2wYJKoZIhvcNAQcCoIIRzDCCEcgCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUJgIN2Davou+neHlFRpE0aN5c
-# 0niggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUkU4fV/5KE+kPc4fnEWCXGu4S
+# fB6ggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
 # AQsFADAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0MB4XDTIxMTIwMjEyMzYz
 # MFoXDTIyMTIwMjEyNTYzMFowGzEZMBcGA1UEAwwQREtTY3JpcHRTZWxmQ2VydDCC
 # ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAL9d3xGpFZgLEPcI1mIG8OPB
@@ -478,23 +477,23 @@ if ($CMake[-3] -eq '-- Configuring done') {
 # AQEwLzAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0AhBkA8KQDEfOnE6+h4RS
 # u4uIMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqG
 # SIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3
-# AgEVMCMGCSqGSIb3DQEJBDEWBBTwHQmW5tz/CYYI0N5nc4AWeTAYFTANBgkqhkiG
-# 9w0BAQEFAASCAQCrIduzKK8hPUZGxvep+HyGc49qGoD0/QHgLxkpoG3SiEe5tk2g
-# 3t4joeAL+6Jnjp7o2dtAY+A5BaOyQHrlb3F8gLLxw6fE9mss35KXnuVbRS5F8PDL
-# 5viEAjskJwo4i4a69wsZVmtudc3iTKMR90R+D9ZuoTsFta5MRYHnzMP5h5xwqdEV
-# ZX9zQ/Khd8mNrmrqSZAp9bxL6UaO3WgDff9/z2JA2nerhEHbb6tWJG7Vs/hqZirZ
-# r7sM8O+ADZFz8KgBp8zJjn/nITDtUQVKU5YzcK8Y6GgpOCYy5t0oLyaiMOn84V+z
-# ST87YyEMRKiKBMDR+tI0iD/Tmj+L4HkSLGTmoYICMDCCAiwGCSqGSIb3DQEJBjGC
+# AgEVMCMGCSqGSIb3DQEJBDEWBBQdcrBNnds1ZXvhpA2+u//cp4vvLzANBgkqhkiG
+# 9w0BAQEFAASCAQBO4VL/DFixZaLVDNuDX1TqQZ8G+9l673NbjbOIo1zT2cP7Kfyd
+# Z5aJq5S/HPOjxS9fcrVuXeqO0LroOsAR/B9aNhc4EjIPl8uPXZoH8hebNFg6mSmK
+# mcDMPy/13CS1LTAF1Jp6qaxKoxbdZXZJ9alNByA+mSXP4ZcXHr6e7jUBtbaGTn/U
+# VmSxJ4OM1rUuaPjt1/3l8sccztOznKyTNIz4G2lgiUyXVEQBpYCQOIOB7yGJmJPx
+# PS1tICEEL7L/ZHln+2iTfNNTdsRmdXuwZGiqnrKH1PL/4q9oX7WDSwH4fTJ+1tms
+# fqt7stk8t7DkyJHFqjtojvhpNyJj4WyunXLDoYICMDCCAiwGCSqGSIb3DQEJBjGC
 # Ah0wggIZAgEBMIGGMHIxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJ
 # bmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0
 # IFNIQTIgQXNzdXJlZCBJRCBUaW1lc3RhbXBpbmcgQ0ECEA1CSuC+Ooj/YEAhzhQA
 # 8N0wDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwG
-# CSqGSIb3DQEJBTEPFw0yMTEyMDMxNjE1NTBaMC8GCSqGSIb3DQEJBDEiBCCWR9Y/
-# Q23X21d0U7CWCKPSPqTBSkS/eArK7P2ViSTIjzANBgkqhkiG9w0BAQEFAASCAQCN
-# PJPtLv71QDG0U57eWFbmTNVyIEzdB++oU1xC5H1Smtu4OfRakVNQflSs0tEVt8LC
-# H80SE3wIOS9v6YQN5unDEjlxRc/s9K55zavkNIEDL5eZHwU2tZg7p5fts1Ad33gx
-# lplGPNpTBeeUdy8PhaKEYCpBtkiSibiy//xZwMuIOJ39VW39Y4wPmY7t3o5jMmK3
-# cru6zY9dXxslBMzFveghXONNr1XzMIdQ5/4WYxhO55cBUWYX/jvhqq6Hveu26nQ9
-# MgdBECEtjYEA1IMkyYejT0gaWKgO6s3FnS2BUE76ppQQdwOB9ktZ3jQ3hTqLu8Gi
-# LhVdsN31etfm8YYH/MH5
+# CSqGSIb3DQEJBTEPFw0yMTEyMDMxNjUxMDZaMC8GCSqGSIb3DQEJBDEiBCD4o+s+
+# jRklc4KumfXCS9kMnCxKPWIxLYCdxRcp7CkdwTANBgkqhkiG9w0BAQEFAASCAQBk
+# uVT0saYyg8QCYrvV6ZumJBax9CSdLtO2vpSjA2QYA77m1rMntt7SqJhoLHhiNIy/
+# /5sbsP/eWvwtICv9favgLypuqvEJ+l7T3qdKPiezuEWqlC+JTlmJyPqVnMx/PmG8
+# QrUEjvd++1FoYQDgF6Na3Majmj0MOl0nEulP8X2rLK3IvaIZ5brdAz6ga7/w1g/H
+# QW7/36Mjvlpe+z0x9Vf3h0WHfVrlcgj6rCZTyvbooHeS1J3Aim7lUAKurL8x4ehS
+# yBf3UEXi4w/xWm2r9tu8lGroGSiQMl7G7OCxg0JVDKJz/QgghyeOb/VU/O3xpHFn
+# D9T+JXfjCsygs/k21hZe
 # SIG # End signature block
