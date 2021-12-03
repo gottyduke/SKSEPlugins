@@ -54,7 +54,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		
 		$OldPolicy = Get-ExecutionPolicy -Scope LocalMachine
 		if ($OldPolicy -eq 'Restricted') {
-			Write-Host "`tUpdated ExecutionPolicy to [RemoteSigned] on [LocalMachine]"
+			Write-Host "`t* Updated ExecutionPolicy to [RemoteSigned] on [LocalMachine]"
 			Set-ExecutionPolicy RemoteSigned -Scope LocalMachine
 		}
 	}
@@ -64,8 +64,9 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 
 	Write-Host "`tBOOTSTRAP starting, please wait..." -ForegroundColor Red -NoNewline
 	foreach ($env in @('CommonLibSSEPath', 'CustomCommonLibSSEPath', 'DKUtilPath', 'SkyrimSEPath', 'SkyrimAEPath', 'MO2SkyrimSEPath', 'MO2SkyrimAEPath', 'SKSETemplatePath', 'SKSEPluginAuthor')) {
-		[Environment]::SetEnvironmentVariable($env, $null, 'Machine')
+		Start-Job {[Environment]::SetEnvironmentVariable($using:env, $null, 'Machine')} | Out-Null
 	}
+	Get-Job | Wait-Job | Out-Null
 	Write-Host "`r`tBOOTSTRAP initiated!               " -ForegroundColor Yellow
 
 	function Initialize-Repo {
@@ -80,6 +81,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		$CurrentEnv = [System.Environment]::GetEnvironmentVariable($EnvName, 'Machine')
 		if (Test-Path "$CurrentEnv/$Token" -PathType Leaf) {
 			Write-Host "`n`t* Checked out $RepoName" -ForegroundColor Green
+			return
 		} elseif (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
 			Write-Host "`n`t* Located local $RepoName   " -ForegroundColor Green
 			Push-Location $Path
@@ -93,11 +95,12 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			Write-Host "`n`t- Bootstrapping $RepoName..." -ForegroundColor Yellow -NoNewline
 			& git clone $RemoteUrl $Path -q
 			Write-Host "`r`t- Installed $RepoName               " -ForegroundColor Green
-			Write-Host "`t`t- Mapping path, please wait..." -NoNewline
-			$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
-			[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
-			Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
 		}
+		
+		Write-Host "`t`t- Mapping path, please wait..." -NoNewline
+		$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
+		Start-Job {[System.Environment]::SetEnvironmentVariable($using:EnvName, $using:CurrentEnv, 'Machine')} | Out-Null
+		Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
 	}
 
 	function Find-Game {
@@ -119,7 +122,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 				$CurrentEnv = Split-Path $SkyrimFile.Filename
 				Write-Host "`r`t* Located $GameName               " -ForegroundColor Green
 				Write-Host "`t`t- Mapping path, please wait..." -NoNewline
-				[System.Environment]::SetEnvironmentVariable($EnvName, $CurrentEnv, 'Machine')
+				Start-Job {[System.Environment]::SetEnvironmentVariable($using:EnvName, $using:CurrentEnv, 'Machine')} | Out-Null
 				Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
 				break
 			} else {
@@ -138,7 +141,8 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			$MO2Dir.ShowDialog() | Out-Null
 			if (Test-Path "$($MO2Dir.SelectedPath)/mods" -PathType Container) {
 				Write-Host "`tMapping path, please wait..." -NoNewline
-				[System.Environment]::SetEnvironmentVariable($MO2EnvName, $MO2Dir.SelectedPath, 'Machine')
+				$MO2Dir = $MO2Dir.SelectedPath
+				Start-Job {[System.Environment]::SetEnvironmentVariable($using:MO2EnvName, $using:MO2Dir, 'Machine')} | Out-Null
 				Write-Host "`r`t* Enabled MO2 support for $GameName               " -ForegroundColor Green
 				break
 			} else {
@@ -151,8 +155,6 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 
 	# VCPKG_ROOT
 	Initialize-Repo 'VCPKG_ROOT' 'VCPKG' 'vcpkg.exe' 'vcpkg' 'https://github.com/microsoft/vcpkg' 
-	& $env:VCPKG_ROOT\bootstrap-vcpkg.bat | Out-Null
-	& $env:VCPKG_ROOT\vcpkg.exe integrate install | Out-Null
 
 	# CommonLibSSEPath
 	Initialize-Repo 'CommonLibSSEPath' 'CommonLib' 'CMakeLists.txt' 'Library/CommonLibSSE' 'https://github.com/Ryan-rsm-McKenzie/CommonLibSSE'
@@ -165,8 +167,9 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		$CustomCLibDir.ShowDialog() | Out-Null
 		if (Test-Path "$($CustomCLibDir.SelectedPath)/CMakeLists.txt" -PathType Leaf) {
 			Write-Host "`n`t* Enabled custom CommonLib" -ForegroundColor Green
-			[System.Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $CustomCLibDir.SelectedPath, 'Machine')
-			Write-Host "`t`t- CustomCommonLibSSEPath has been set to [$($CustomCLibDir.SelectedPath)]"
+			$CustomCLibDir = $CustomCLibDir.SelectedPath
+			Start-Job {[System.Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $using:CustomCLibDir, 'Machine')} | Out-Null
+			Write-Host "`t`t- CustomCommonLibSSEPath has been set to [$($CustomCLibDir)]"
 			Write-Host "`t`t# To use custom CommonLib in build, append parameter '0' to the !Rebuild command."
 			break
 		} else {
@@ -190,11 +193,19 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	while (-not $Author) {
 		$Author = [Microsoft.VisualBasic.Interaction]::InputBox("Input the mod author name:`n`nThis is used for !MakeNew command to generate projects", 'Author', 'Anon')
 	}
-	[System.Environment]::SetEnvironmentVariable('SKSEPluginAuthor', $Author, 'Machine')
+	Start-Job {[System.Environment]::SetEnvironmentVariable('SKSEPluginAuthor', $using:Author, 'Machine')} | Out-Null
 	Write-Host "`n`t* Plugin author: $Author" -ForegroundColor Magenta
 
-	Write-Host "`n`t>>> Bootstrapping has finished! <<<" -ForegroundColor Green
-	Write-Host "`n`tRestart current command line interface to apply BOOTSTRAP."
+	Write-Host "`n`t>>> Bootstrapping finishing up... <<<" -ForegroundColor Green
+	Start-Job {
+		& $env:VCPKG_ROOT\bootstrap-vcpkg.bat
+		& $env:VCPKG_ROOT\vcpkg.exe integrate install
+	} | Out-Null
+	Get-Job | Wait-Job | Out-Null
+	Get-Job | Remove-Job | Out-Null
+
+
+	Write-Host "`n`tRestart current command line interface to complete BOOTSTRAP."
 	Exit
 }
 
@@ -227,19 +238,16 @@ project(
 # update script for sourcelist.cmake generation
 execute_process(COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/!Update.ps1" "DISTRIBUTE")
 
-set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
-set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 set(SKSE_SUPPORT_XBYAK ON)
 set(DKUTIL_DEBUG_BUILD ON)
 
 # out-of-source builds only
 if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
-	message(
-		FATAL_ERROR
-			"In-source builds are not allowed."
-	)
+	message(FATAL_ERROR "In-source builds are not allowed.")
 endif()
 
 '@
@@ -315,8 +323,8 @@ $Trail += "`"$Resolved`")`n"
 $Trail += @'
 
 configure_file(
-	$ENV{DKUtilPath}/cmake/CLibCustomCMakeLists.txt.in
-	$ENV{CommonLibSSEPath}/CMakeLists.txt
+	"$ENV{DKUtilPath}/cmake/CLibCustomCMakeLists.txt.in"
+	"$ENV{CommonLibSSEPath}/CMakeLists.txt"
 	COPYONLY
 )
 
@@ -391,11 +399,12 @@ if ($CMake[-3] -eq '-- Configuring done') {
 } else {
 	Write-Host "`tRebuild failed" -ForegroundColor Red
 }
+
 # SIG # Begin signature block
 # MIIR2wYJKoZIhvcNAQcCoIIRzDCCEcgCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUEFNwbtMTfPXyhR+1V68+q4WL
-# ugCggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUJgIN2Davou+neHlFRpE0aN5c
+# 0niggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
 # AQsFADAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0MB4XDTIxMTIwMjEyMzYz
 # MFoXDTIyMTIwMjEyNTYzMFowGzEZMBcGA1UEAwwQREtTY3JpcHRTZWxmQ2VydDCC
 # ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAL9d3xGpFZgLEPcI1mIG8OPB
@@ -469,23 +478,23 @@ if ($CMake[-3] -eq '-- Configuring done') {
 # AQEwLzAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0AhBkA8KQDEfOnE6+h4RS
 # u4uIMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqG
 # SIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3
-# AgEVMCMGCSqGSIb3DQEJBDEWBBRsA4MN7LPv9mUk+ex4MjWOAdRinjANBgkqhkiG
-# 9w0BAQEFAASCAQByR1pcJv941oYzLy2WWUtkT4ZfXQmp9lyQt0DDLRRkPR/v6mTq
-# F1r2yt4apXp5XvD10WP+SRWkpvItEQoYdcb09N9sBH59KX+riBDmNdFOKcSAks/z
-# EYnjSbwC4/gcNhv1y9sAOm0XhHsZKi/CgNBg8fKLEsL5ia+VaxJMmX3gsV8qom4o
-# MRXJkT/+P5CnosuGpHvWDmhsucev6mGrDArCf33mCgalKuoTmhdD3WtAxOyB2KI4
-# 6YI1JdxRNGWTezm3roZDkYjjaxuUzjzutaxuoA0MD8WA3kzGr3BkuQLCqQRwHBMc
-# CnrzQrAsYKxJlf+1WV0mIcdOqrbXQCFt3knnoYICMDCCAiwGCSqGSIb3DQEJBjGC
+# AgEVMCMGCSqGSIb3DQEJBDEWBBTwHQmW5tz/CYYI0N5nc4AWeTAYFTANBgkqhkiG
+# 9w0BAQEFAASCAQCrIduzKK8hPUZGxvep+HyGc49qGoD0/QHgLxkpoG3SiEe5tk2g
+# 3t4joeAL+6Jnjp7o2dtAY+A5BaOyQHrlb3F8gLLxw6fE9mss35KXnuVbRS5F8PDL
+# 5viEAjskJwo4i4a69wsZVmtudc3iTKMR90R+D9ZuoTsFta5MRYHnzMP5h5xwqdEV
+# ZX9zQ/Khd8mNrmrqSZAp9bxL6UaO3WgDff9/z2JA2nerhEHbb6tWJG7Vs/hqZirZ
+# r7sM8O+ADZFz8KgBp8zJjn/nITDtUQVKU5YzcK8Y6GgpOCYy5t0oLyaiMOn84V+z
+# ST87YyEMRKiKBMDR+tI0iD/Tmj+L4HkSLGTmoYICMDCCAiwGCSqGSIb3DQEJBjGC
 # Ah0wggIZAgEBMIGGMHIxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJ
 # bmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0
 # IFNIQTIgQXNzdXJlZCBJRCBUaW1lc3RhbXBpbmcgQ0ECEA1CSuC+Ooj/YEAhzhQA
 # 8N0wDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwG
-# CSqGSIb3DQEJBTEPFw0yMTEyMDMxMjQwMjlaMC8GCSqGSIb3DQEJBDEiBCCJ8MbI
-# ubalLYWOly3cbhyBLGGMnd6ogIcvNuaAgOPtbzANBgkqhkiG9w0BAQEFAASCAQBY
-# HBHWQqWeGVfdq8M5yqZ0U/zbrNgWLdTSHLeji3NRRMQTzucwMeuqAWtNx0lLM26x
-# YCJ3b8FJlL5pvrrsS8wY3Lw32UhcGilIqrn0wFdYWllvuqKPr4xqvvLurbnjcGqz
-# O5HhNQ/MkgNyY2qMgdh4XEqylenrj8nkmWb5+B1fgEzgOOn/6vh56qn2m63S66KY
-# lj1Uj2ykWpcDY3pgPcL0P+hce6lDaVPS2tQi9+qazo8mYKBD36IKtlobJh+LMrk9
-# rmOfCb2FA1Dog3VUmEm47hCPB+bnAj4qHdegmZ4iCvwYKR9sYsoI19kTUbDn4sZB
-# uA8MC5V2/gsJ+FQCSf9M
+# CSqGSIb3DQEJBTEPFw0yMTEyMDMxNjE1NTBaMC8GCSqGSIb3DQEJBDEiBCCWR9Y/
+# Q23X21d0U7CWCKPSPqTBSkS/eArK7P2ViSTIjzANBgkqhkiG9w0BAQEFAASCAQCN
+# PJPtLv71QDG0U57eWFbmTNVyIEzdB++oU1xC5H1Smtu4OfRakVNQflSs0tEVt8LC
+# H80SE3wIOS9v6YQN5unDEjlxRc/s9K55zavkNIEDL5eZHwU2tZg7p5fts1Ad33gx
+# lplGPNpTBeeUdy8PhaKEYCpBtkiSibiy//xZwMuIOJ39VW39Y4wPmY7t3o5jMmK3
+# cru6zY9dXxslBMzFveghXONNr1XzMIdQ5/4WYxhO55cBUWYX/jvhqq6Hveu26nQ9
+# MgdBECEtjYEA1IMkyYejT0gaWKgO6s3FnS2BUE76ppQQdwOB9ktZ3jQ3hTqLu8Gi
+# LhVdsN31etfm8YYH/MH5
 # SIG # End signature block
