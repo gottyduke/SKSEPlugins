@@ -156,7 +156,6 @@ if ($Mode -eq 'COPY') { # post build event
         # update vcpkg.json accordinly
         $vcpkg = [IO.File]::ReadAllText("$PSScriptRoot/vcpkg.json") | ConvertFrom-Json
         $vcpkg.'version-string' = $Version    
-        
         if ($env:RebuildInvoke) {
             if ($vcpkg | Get-Member script-version) {
                 $vcpkg.'script-version' = $env:DKScriptVersion
@@ -177,6 +176,12 @@ if ($Mode -eq 'COPY') { # post build event
                 $vcpkg | Add-Member -Name 'install-name' -Value $Folder -MemberType NoteProperty
             }
         }
+
+        if (Test-Path "$Path/version.rc" -PathType Leaf) {
+            $VersionResource = [IO.File]::ReadAllText("$Path/version.rc") -replace "`"FileDescription`",\s`"$Folder`"",  "`"FileDescription`", `"$($vcpkg.'description')`""
+            [IO.File]::WriteAllText("$Path/version.rc", $VersionResource)
+        }
+
         $vcpkg = $vcpkg | ConvertTo-Json
         [IO.File]::WriteAllText("$PSScriptRoot/vcpkg.json", $vcpkg) # damn you encoding
     }

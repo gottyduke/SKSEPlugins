@@ -85,12 +85,6 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			return
 		} elseif (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
 			Write-Host "`n`t* Located local $RepoName   " -ForegroundColor Green
-			Push-Location $Path
-			try {
-				& git checkout -f master -q
-			} finally {
-				Pop-Location
-			}
 		} else {
 			Remove-Item "$PSScriptRoot/$Path" -Recurse -Force -Confirm:$false -ErrorAction Ignore
 			Write-Host "`n`t- Bootstrapping $RepoName..." -ForegroundColor Yellow -NoNewline
