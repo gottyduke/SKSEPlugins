@@ -11,7 +11,7 @@ param(
 $ErrorActionPreference = 'Stop'
 
 $env:RebuildInvoke = $true
-$env:DKScriptVersion = '11203'
+$env:DKScriptVersion = '11205'
 $env:BuildConfig = $Mode0
 $env:BuildTarget = $Mode1
 
@@ -94,7 +94,12 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		
 		Write-Host "`t`t- Mapping path, please wait..." -NoNewline
 		$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
-		Start-Job {[System.Environment]::SetEnvironmentVariable($using:EnvName, $using:CurrentEnv, 'Machine')} | Out-Null
+		Start-Job {
+			Push-Location $using:CurrentEnv
+			& git checkout -f master -q
+			Pop-Location
+			[System.Environment]::SetEnvironmentVariable($using:EnvName, $using:CurrentEnv, 'Machine')
+		} | Out-Null
 		Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
 	}
 
@@ -150,11 +155,6 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 
 	# VCPKG_ROOT
 	Initialize-Repo 'VCPKG_ROOT' 'VCPKG' 'vcpkg.exe' 'vcpkg' 'https://github.com/microsoft/vcpkg'
-	$env:VCPKG_ROOT = [System.Environment]::GetEnvironmentVariable('VCPKG_ROOT', 'Machine')
-	Start-Job {
-		& $env:VCPKG_ROOT\bootstrap-vcpkg.bat
-		& $env:VCPKG_ROOT\vcpkg.exe integrate install
-	} | Out-Null
 
 	# CommonLibSSEPath
 	Initialize-Repo 'CommonLibSSEPath' 'CommonLib' 'CMakeLists.txt' 'Library/CommonLibSSE' 'https://github.com/Ryan-rsm-McKenzie/CommonLibSSE'
@@ -199,6 +199,10 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	Write-Host "`n`t>>> Bootstrapping finishing up... <<<" -ForegroundColor Green
 	Get-Job | Wait-Job | Out-Null
 	Get-Job | Remove-Job | Out-Null
+
+	$env:VCPKG_ROOT = [System.Environment]::GetEnvironmentVariable('VCPKG_ROOT', 'Machine')
+	& $env:VCPKG_ROOT\bootstrap-vcpkg.bat | Out-Null
+	& $env:VCPKG_ROOT\vcpkg.exe integrate install | Out-Null
 
 	Write-Host "`n`tRestart current command line interface to complete BOOTSTRAP."
 	Exit
@@ -398,8 +402,8 @@ if ($CMake[-3] -eq '-- Configuring done') {
 # SIG # Begin signature block
 # MIIR2wYJKoZIhvcNAQcCoIIRzDCCEcgCAQExCzAJBgUrDgMCGgUAMGkGCisGAQQB
 # gjcCAQSgWzBZMDQGCisGAQQBgjcCAR4wJgIDAQAABBAfzDtgWUsITrck0sYpfvNR
-# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUc4JonWZ3z8Fg1GyN1rI2cTYd
-# ss6ggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
+# AgEAAgEAAgEAAgEAAgEAMCEwCQYFKw4DAhoFAAQUoQIpuhIfI5lPdNIbvR+2faFT
+# dlSggg1BMIIDBjCCAe6gAwIBAgIQZAPCkAxHzpxOvoeEUruLiDANBgkqhkiG9w0B
 # AQsFADAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0MB4XDTIxMTIwMjEyMzYz
 # MFoXDTIyMTIwMjEyNTYzMFowGzEZMBcGA1UEAwwQREtTY3JpcHRTZWxmQ2VydDCC
 # ASIwDQYJKoZIhvcNAQEBBQADggEPADCCAQoCggEBAL9d3xGpFZgLEPcI1mIG8OPB
@@ -473,23 +477,23 @@ if ($CMake[-3] -eq '-- Configuring done') {
 # AQEwLzAbMRkwFwYDVQQDDBBES1NjcmlwdFNlbGZDZXJ0AhBkA8KQDEfOnE6+h4RS
 # u4uIMAkGBSsOAwIaBQCgeDAYBgorBgEEAYI3AgEMMQowCKACgAChAoAAMBkGCSqG
 # SIb3DQEJAzEMBgorBgEEAYI3AgEEMBwGCisGAQQBgjcCAQsxDjAMBgorBgEEAYI3
-# AgEVMCMGCSqGSIb3DQEJBDEWBBSWiLVj7aOz4o0A0gYlM+X1HCA2mzANBgkqhkiG
-# 9w0BAQEFAASCAQCR1hkPOMCNzbTyptRYV5FzckqOTYe2JnGzgabxMwTFymZR5Yxa
-# 4XJLWSTv8dbi0xhONHXmYyVHsjhraX9BOG0ulz5blp/3Zvk3U2Mr5JkFewGIE8Vf
-# lGW+pB84OgXGl78iqtSTJeIfv6G9a8uVo2ZG1iNsKeOVJ4Es0hz7cZh/Qd2C8DsV
-# ylVX+0PzqmZp6wLR/kWcPwRcc2FoqK52ZHcII35TeZ186qozSgQjChWNYG9ITlHm
-# mDPjplJkwoRtoHr9f/6D5bQkzrPNYdq9tGJ+zFNgx0F6xGUOWYg8LIGoUFXCzJ8W
-# Gg4niYzynY94cRU0T3iyW5rEQckUA3nFvy08oYICMDCCAiwGCSqGSIb3DQEJBjGC
+# AgEVMCMGCSqGSIb3DQEJBDEWBBSQud3ZUXtYVQQSPob138ytqiasrzANBgkqhkiG
+# 9w0BAQEFAASCAQCIXMj62cIPJlkYVyzj88wH2izij4Zyx6igE+nTfcZvnbilvQLw
+# ACtBx7AZPws7nbsaAqhonlfsDDdqCGGadaO/KqhqEyNQvB2tLZb+J4a7pk5RpUXp
+# 3Jj1d8sC3hUh4OJoEwhw8GThR1Idvxzq/6bDGH1NX0Zq5KW8puvfnzpkIVhBh3m3
+# 5Ese/Onutu10GAqfrxPZ78x54WHJwkcz1Daj7JubYf2AadIFOu8R3kBipdy0S2Hh
+# Ixmcyj+s6B+PlfIf0ooDOZczq4CB5mjcDfTgd9+MqtPlaJX83RWSRnq4pXLHtW+A
+# 1Keb+yAy6f0uWMjabywktbQxs+yA1fVAb6zAoYICMDCCAiwGCSqGSIb3DQEJBjGC
 # Ah0wggIZAgEBMIGGMHIxCzAJBgNVBAYTAlVTMRUwEwYDVQQKEwxEaWdpQ2VydCBJ
 # bmMxGTAXBgNVBAsTEHd3dy5kaWdpY2VydC5jb20xMTAvBgNVBAMTKERpZ2lDZXJ0
 # IFNIQTIgQXNzdXJlZCBJRCBUaW1lc3RhbXBpbmcgQ0ECEA1CSuC+Ooj/YEAhzhQA
 # 8N0wDQYJYIZIAWUDBAIBBQCgaTAYBgkqhkiG9w0BCQMxCwYJKoZIhvcNAQcBMBwG
-# CSqGSIb3DQEJBTEPFw0yMTEyMDMxNzIxNTFaMC8GCSqGSIb3DQEJBDEiBCCqMTOE
-# GTGLd0k1amVTurQ3VT2BRgdEVHeitxpRAxGsWzANBgkqhkiG9w0BAQEFAASCAQBO
-# Vyvrm42PrFX9L4K4j3l2UsDBsUdvDKeA0LuYOZGwidFXAc45eydwUrzfaykkgKrs
-# PEAg2FwU0PKHLloNHVQcL4iGK2cLadFFA4A83ZNSFAoqOjsV51XZ9AeCptvXIlL2
-# P1NCIEXirDCuS9ZjGKSYJWbVuLbLrGq2EqN5etaS3ZqjwPCcLoFuYH3ScI1YOyfF
-# 7iUi/RkblXq50/AQmvzj0kSdYXnyXaw9HubjArNTEsWScer8Gg9v9pccTtSKBbWw
-# byU5vFXzz95eKtQ5EHzYlgRVOFLxZmWXJ1J++ZLWP7yJJqbCpansA06MIv7cPFKR
-# HCgDRse4nzECOMW6Br6/
+# CSqGSIb3DQEJBTEPFw0yMTEyMDUxNDM5MTBaMC8GCSqGSIb3DQEJBDEiBCBhwcZm
+# 5ygKJLfTTpQRFBUI0PkbZ2PYRwbqG/wCfj5t3zANBgkqhkiG9w0BAQEFAASCAQA6
+# UcBDf//p0NHE1GrNVGgb7XqXsEOCcLmeTIQ7V03WVIgg9ORTQud8jrWMJlGZzhPZ
+# 4gYqf6eHjQIPKLFKUm5+FRzJoERnZDGkoIOCyePHzijESjZOvXgCGPiV5VKjuavn
+# 1Ag1zRib0DEZDVLODA7BVdUzgohuB0H5q5l8a6q7SCgWD5HQy3pJctsLSyuTnDQK
+# 2Mz79CzRebAEYHn0mtMqHzaW6niuvI2objUis30yiQWaKMPwkyQjzVjQ2srj3iQ8
+# 6vmfnYijMnGGDY6xhu5Dx8JIn3hUitbpxsAWrqdiBV4ANBEHzye3/5WfBOEpWAKI
+# +Tj71e5Pdd7CdGKaIAbQ
 # SIG # End signature block
