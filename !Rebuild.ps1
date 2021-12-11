@@ -4,25 +4,25 @@
 param(
 	[Parameter(Mandatory)][ValidateSet('MT', 'MD', 'BOOTSTRAP')][string]$Mode0,
 	[ValidateSet('AE', 'SE')][string]$Mode1,
-	[switch]$CustomCLib,
+	[Alias('C', 'Custom')][switch]$CustomCLib,
 	[switch]$WhatIf,
 	[switch]$DKDebug
 )
 
 $ErrorActionPreference = 'Stop'
 
-$env:RebuildInvoke = $true
-$env:DKScriptVersion = '11210'
+$env:DKScriptVersion = '11211'
 $env:BuildConfig = $Mode0
 $env:BuildTarget = $Mode1
 
-$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
-$admin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
-
 Write-Host "`tDKScriptVersion $env:DKScriptVersion`t$Mode0`t$Mode1`n"
 
+
 # @@BOOTSTRAP
-if ($Mode0 -eq 'BOOTSTRAP') {
+if ($Mode0 -eq 'BOOTSTRAP') {	
+	$currentPrincipal = New-Object Security.Principal.WindowsPrincipal([Security.Principal.WindowsIdentity]::GetCurrent())
+	$admin = $currentPrincipal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
 	if (!$admin) {
 		Write-Host "`tExecute with admin privilege to continue!" -ForegroundColor Red
 		Exit
@@ -81,20 +81,16 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		)
 		
 		process {
-			$CurrentEnv = [System.Environment]::GetEnvironmentVariable($EnvName, 'Machine')
-			if (Test-Path "$CurrentEnv/$Token" -PathType Leaf) {
-				Write-Host "`n`t* Checked out $RepoName" -ForegroundColor Green
-			} elseif (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
+			if (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
 				Write-Host "`n`t* Located local $RepoName   " -ForegroundColor Green
-				$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
 			} else {
 				Remove-Item "$PSScriptRoot/$Path" -Recurse -Force -Confirm:$false -ErrorAction:SilentlyContinue
 				Write-Host "`n`t- Bootstrapping $RepoName..." -ForegroundColor Yellow -NoNewline
 				& git clone $RemoteUrl $Path -q
 				Write-Host "`r`t- Installed $RepoName               " -ForegroundColor Green
-				$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
 			}
 			
+			$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
 			Write-Host "`t`t- Mapping path, please wait..." -NoNewline
 			Start-Job {
 				Push-Location $using:CurrentEnv
@@ -159,7 +155,11 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	Write-Host "`t>>> Checking out requirements... <<<" -ForegroundColor Yellow
 
 	# VCPKG_ROOT
-	Initialize-Repo 'VCPKG_ROOT' 'VCPKG' 'vcpkg.exe' 'vcpkg' 'https://github.com/microsoft/vcpkg'
+	if (Test-Path "$env:VCPKG_ROOT/vcpkg.exe" -PathType Leaf) {
+		Write-Host "`n`t* Located local VCPKG" -ForegroundColor Green
+	} else {
+		Initialize-Repo 'VCPKG_ROOT' 'VCPKG' 'vcpkg.exe' 'vcpkg' 'https://github.com/microsoft/vcpkg'
+	}
 
 	# CommonLibSSEPath
 	Initialize-Repo 'CommonLibSSEPath' 'CommonLib' 'CMakeLists.txt' 'Library/CommonLibSSE' 'https://github.com/Ryan-rsm-McKenzie/CommonLibSSE'
@@ -175,7 +175,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			$CustomCLibDir = $CustomCLibDir.SelectedPath
 			Start-Job {[System.Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $using:CustomCLibDir, 'Machine')} | Out-Null
 			Write-Host "`t`t- CustomCommonLibSSEPath has been set to [$($CustomCLibDir)]"
-			Write-Host "`t`t# To use custom CommonLib in build, append parameter '0' to the !Rebuild command."
+			Write-Host "`t`t# To use custom CommonLib in build, append switch parameter '-C', '-Custom', or '-CustomCLib' to the !Rebuild command."
 			break
 		} else {
 			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Unable to locate valid CMakeLists.txt, try again?', 52, 'Custom CLib support')		
@@ -249,9 +249,10 @@ $CMakeLists = @()
 $CLibType = $null
 $CLibPath = $null
 if ($CustomCLib -and !(Test-Path "$env:CustomCommonLibSSEPath/CMakeLists.txt" -PathType Leaf)) {
-	Write-Host "`tCustomCLib enabled but target path does not contain valid CMakeLists!`n`t`t# Path: $($env:CustomCommonLibSSEPath)`n`tFallback to default CLib..." -ForegroundColor Red
 	$CustomCLib = $false
-} elseif ($CustomCLib) {
+	Write-Host "`t! CustomCLib invoked but target path does not contain valid CMakeLists!`n`t`t# Path: $($env:CustomCommonLibSSEPath)`n`tFallback to default CLib..." -ForegroundColor Red
+}
+if ($CustomCLib) {
 	$CLibType = 'Custom'
 	$CLibPath = $env:CustomCommonLibSSEPath
 } elseif (Test-Path "$env:CommonLibSSEPath/CMakeLists.txt" -PathType Leaf) {
@@ -269,7 +270,7 @@ if ($CustomCLib -and !(Test-Path "$env:CustomCommonLibSSEPath/CMakeLists.txt" -P
 	Write-Host "`tNone of the CLib paths is valid!`n`tOR`n`tIncorrect BOOTSTRAP" -ForegroundColor Red
 	Exit
 }
-$CMakeLists += "`nset(`$ENV{CommonLibSSEPath} `"$($CLibPath -replace '\\', '/')`")`n"
+$CMakeLists += "`nset(`ENV{CommonLibSSEPath} `"$($CLibPath -replace '\\', '/')`")`n"
 $CMakeLists += Add-Subdirectory "$($CLibType)CommonLib" '$ENV{CommonLibSSEPath} "CLib"'
 Write-Host "`t===> Rebasing $CLibType CLib <===" -ForegroundColor DarkYellow
 Copy-Item "$PSScriptRoot/cmake/CLibCustomCMakeLists.txt.in" "$CLibPath/CMakeLists.txt" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
@@ -283,25 +284,19 @@ Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction:I
 # add subdirectories
 $Dependencies = @()
 Write-Host "`tBuilding CMake targets..."
-$FIPCH = [IO.File]::ReadAllText("$PSScriptRoot/cmake/FIPCH.in")
 @('Library', 'Plugins') | ForEach-Object {
-	$CMakeLists += "set(GROUP `"$_`")`n"
+	$CMakeLists += "`n`nset(GROUP `"$_`")`n"
 	Get-ChildItem "$_" -Directory -Exclude ('*CommonLibSSE*') | Resolve-Path -Relative | ForEach-Object {
 		if (Test-Path "$_/CMakeLists.txt" -PathType Leaf) {
 			$vcpkg = [IO.File]::ReadAllText("$_/vcpkg.json") | ConvertFrom-Json
 			$Dependencies += $vcpkg.'dependencies'
 			$CMakeLists += Add-Subdirectory $_.Substring(2) $_.Substring(2)
-			$PatchedFI = $null
 			if ($_.EndsWith('DKUtil')) {
 				if ($DKDebug) {
-					$PatchedFI = $FIPCH -replace 'TARGET_PH', 'DKUtilDebugger'
-					$PatchedFI = $PatchedFI -replace 'TARGET_BINARY', 'Library/DKUtil'
-					$CMakeLists += $PatchedFI -replace '\\', '/'
+					$CMakeLists += "fipch(`"DKUtilDebugger`" `"$($_.Substring(2) -replace '\\', '/')`")`n"
 				}
 			} else {
-				$PatchedFI = $FIPCH -replace 'TARGET_PH', $_.Substring(10)
-				$PatchedFI = $PatchedFI -replace 'TARGET_BINARY', $_.Substring(2)
-				$CMakeLists += $PatchedFI -replace '\\', '/'
+				$CMakeLists += "fipch(`"$($_.Substring(10))`" `"$($_.Substring(2) -replace '\\', '/')`")`n"
 			}
 		}
 	}
@@ -338,7 +333,7 @@ if ($WhatIf) {
 }
 
 
-# cmake
+# cmake generator
 Write-Host "`tBuilding solution..."
 $Options = @(
 	"-DDKUTIL_DEBUG_BUILD:BOOL=$([Int32][bool]$DKDebug)",
@@ -365,3 +360,4 @@ if ($CMake[-2] -ne '-- Generating done') {
 	Write-Host "`tRebuild complete" -ForegroundColor Green
 	Invoke-Item "$PSScriptRoot/Build"
 }
+

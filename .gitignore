@@ -2,6 +2,7 @@ vcpkg/
 Build/
 .vs/
 CMakeLists.txt
+RemoveSig.ps1
 PluginTutorialCN/
 Plugins/
 Library/

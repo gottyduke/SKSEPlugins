@@ -23,9 +23,19 @@ endif()
 # update script for sourcelist.cmake generation
 execute_process(COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/!Update.ps1" "DISTRIBUTE")
 
+macro(fipch target_project)
+	target_compile_options(
+		${target_project}
+		PRIVATE
+			/FI${CMAKE_BINARY_DIR}/${GROUP}/${target_project}/CMakeFiles/${target_project}.dir/$<CONFIG>/cmake_pch.hxx
+	)
+endmacro()
+
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 add_compile_options(
 	/MP
@@ -34,6 +44,5 @@ add_compile_definitions(
 	ANNIVERSARY_EDITION=${ANNIVERSARY_EDITION}
 )
 
-set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 
 set(GROUP "CLib")

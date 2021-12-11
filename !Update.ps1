@@ -215,20 +215,28 @@ if ($Mode -eq 'COPY') { # post build event
 
     # update vcpkg.json accordinly
     $vcpkg = [IO.File]::ReadAllText("$PSScriptRoot/vcpkg.json") | ConvertFrom-Json
+    $vcpkg.'name' = $vcpkg.'name'.ToLower()
     $vcpkg.'version-string' = $Version    
-    if ($env:RebuildInvoke) {
-        if (!($vcpkg | Get-Member features)) {
-            $features = @"
+    if (!($vcpkg | Get-Member features)) {
+        $features = @"
 {
-    "mo2-install": {
-        "description": ""
-    }
+"mo2-install": {
+    "description": ""
+}
 }
 "@ | ConvertFrom-Json
-            $features.'mo2-install'.'description' = $Folder
-            $vcpkg | Add-Member -Name 'features' -Value $features -MemberType NoteProperty
-        }
+        $features.'mo2-install'.'description' = $Folder
+        $vcpkg | Add-Member -Name 'features' -Value $features -MemberType NoteProperty
     }
+
+    # patch regression
+    $vcpkg.PsObject.Properties.Remove('script-version')
+    $vcpkg.PsObject.Properties.Remove('build-config')
+    $vcpkg.PsObject.Properties.Remove('build-target')
+    if ($vcpkg | Get-Member install-name) {
+        $vcpkg.'features'.'mo2-install'.'description' = $vcpkg.'install-name'
+    }
+    $vcpkg.PsObject.Properties.Remove('install-name')
 
     if (Test-Path "$Path/version.rc" -PathType Leaf) {
         $VersionResource = [IO.File]::ReadAllText("$Path/version.rc") -replace "`"FileDescription`",\s`"$Folder`"",  "`"FileDescription`", `"$($vcpkg.'description')`""
