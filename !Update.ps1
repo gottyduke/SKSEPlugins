@@ -1,14 +1,19 @@
 # args
 param (
-    [ValidateSet('COPY', 'SOURCEGEN', 'DISTRIBUTE')][string]$Mode,
+    [Parameter(Mandatory)][ValidateSet('COPY', 'SOURCEGEN', 'DISTRIBUTE')][string]$Mode,
     [string]$Version,
     [string]$Path,
     [string]$Project,
     [string]$Anniversary # VS passes in string
 )
+
+
 $ErrorActionPreference = "Stop"
 
+$Folder = $PSScriptRoot | Split-Path -Leaf
 $AcceptedExt = @('.c', '.cpp', '.cxx', '.h', '.hpp', '.hxx')
+
+
 function Resolve-Files {
     param (
         [Parameter(ValueFromPipeline)][string]$a_parent = $PSScriptRoot,
@@ -16,15 +21,29 @@ function Resolve-Files {
     )
     
     process {
-        Push-Location $PSScriptRoot # out of source invocation sucks
-        $_generated = [System.Collections.ArrayList]@()
+        Push-Location $PSScriptRoot
+        $capacity = 16
+        if ($Folder -eq 'CommonLibSSE') {
+            $capacity = 2048
+        } else {
+            $capacity = 16
+        }
+        $_generated = [System.Collections.ArrayList]::new($capacity)
 
         try {
             foreach ($directory in $a_directory) {
-                Write-Host "`t<$a_parent/$directory>"
-                Get-ChildItem "$a_parent/$directory" -Recurse -File -ErrorAction SilentlyContinue | Where-Object {($_.Extension -in $AcceptedExt) -and !($_.Name.EndsWith('Version.h'))} | Resolve-Path -Relative | ForEach-Object {
-                    Write-Host "`t`t<$_>"
+                Get-ChildItem "$a_parent/$directory" -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
+                    ($_.Extension -in $AcceptedExt) -and 
+                    ($_.Name -ne 'Version.h')
+                } | Resolve-Path -Relative | ForEach-Object {
                     $_generated.Add("`n`t`"$($_.Substring(2) -replace '\\', '/')`"") | Out-Null
+                }
+
+                if (!$env:RebuildInvoke) {
+                    Write-Host "`t<$a_parent/$directory>"
+                    foreach ($file in $_generated) {
+                        Write-Host "`t`t<$file>"
+                    }
                 }
             }
         } finally {
@@ -35,12 +54,12 @@ function Resolve-Files {
     }
 }
 
-# project path
-$Folder = $PSScriptRoot | Split-Path -Leaf
 
-# operation
 Write-Host "`n`t<$Folder> [$Mode]"
-if ($Mode -eq 'COPY') { # post build event
+
+
+# @@COPY
+if ($Mode -eq 'COPY') {
     $GameBase = $null
     $MO2 = $null
     $Destination = $null
@@ -201,7 +220,11 @@ if ($Mode -eq 'COPY') { # post build event
 
     $MsgBox.ShowDialog() | Out-Null
     Exit
-} elseif ($Mode -eq 'SOURCEGEN') { # cmake sourcelist generation
+}
+
+
+# @@SOURCEGEN
+if ($Mode -eq 'SOURCEGEN') {
     Write-Host "`tGenerating CMake sourcelist..."
     Remove-Item "$Path/sourcelist.cmake" -Force -Confirm:$false -ErrorAction Ignore
 
@@ -245,11 +268,16 @@ if ($Mode -eq 'COPY') { # post build event
 
     $vcpkg = $vcpkg | ConvertTo-Json
     [IO.File]::WriteAllText("$PSScriptRoot/vcpkg.json", $vcpkg)
-} elseif ($Mode -eq 'DISTRIBUTE') { # update script to every project
-    ((Get-ChildItem 'Plugins' -Directory -Recurse) + (Get-ChildItem 'Library' -Directory -Recurse)) | Resolve-Path -Relative | ForEach-Object {
-        if (Test-Path "$_/CMakeLists.txt" -PathType Leaf) {
-            Write-Host "`tUpdated <$_>"
-            Robocopy.exe "$PSScriptRoot" "$_" '!Update.ps1' /MT /NJS /NFL /NDL /NJH
-        }
+}
+
+
+# @@DISTRIBUTE
+if ($Mode -eq 'DISTRIBUTE') { # update script to every project
+    Get-ChildItem "$PSScriptRoot/*/*" -Directory | Where-Object {
+        $_.Name -notin @('vcpkg', 'Build', '.git', 'PluginTutorialCN') -and
+        (Test-Path "$_/CMakeLists.txt" -PathType Leaf)
+    } | ForEach-Object {
+        Write-Host "`n`tUpdated <$_>"
+        Robocopy.exe "$PSScriptRoot" "$_" '!Update.ps1' /MT /NJS /NFL /NDL /NJH | Out-Null
     }
 }

@@ -6,16 +6,16 @@ param(
 	[ValidateSet('AE', 'SE')][string]$Mode1,
 	[Alias('C', 'Custom')][switch]$CustomCLib,
 	[switch]$WhatIf,
-	[switch]$DKDebug
+	[string[]]$EnableDebugger
 )
 
 $ErrorActionPreference = 'Stop'
 
-$env:DKScriptVersion = '11211'
-$env:BuildConfig = $Mode0
-$env:BuildTarget = $Mode1
+$env:DKScriptVersion = '11216'
+$env:RebuildInvoke = $true
 
 Write-Host "`tDKScriptVersion $env:DKScriptVersion`t$Mode0`t$Mode1`n"
+[IO.Directory]::SetCurrentDirectory($PSScriptRoot)
 
 
 # @@BOOTSTRAP
@@ -214,7 +214,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 }
 
 
-# @@Build Config
+# @@Build Linkage
 $Triplet = $null
 $MTD = ($Mode0 -ne 'MT')
 if ($MTD) {
@@ -239,13 +239,33 @@ if ($ANNIVERSARY_EDITION -and $env:SkyrimAEPath) {
 }
 
 
+function Normalize ($text) {
+	return $text -replace '\\', '/'
+}
+
+
 function Add-Subdirectory ($Name, $Path) {
-	return "message(CHECK_START `"Rebuilding $($Name -replace '\\', '/')`")`nadd_subdirectory($($Path -replace '\\', '/'))`nmessage(CHECK_PASS `"Complete`")"
+	return Normalize "message(CHECK_START `"Rebuilding $Name`")`nadd_subdirectory($Path)`nmessage(CHECK_PASS `"Complete`")"
+}
+
+
+$Concerns = @()
+function Show-Concerns {
+	if (!$Concerns.Count) {
+		return
+	}
+
+	Write-Host "`n`tFollowing concerns regarding the vcpkg dependencies: "
+	foreach ($concern in $Concerns) {
+		Write-Host "`n`t`t $concern"
+	}
+
+	Write-Host "`tThese concerns have been resolved by additional external linking, to prevent this message from showing, try address this issue in the target CMakeLists.txt"
 }
 
 
 # @@CLib
-$CMakeLists = @()
+$CMakeLists = [System.Collections.ArrayList]::new(128)
 $CLibType = $null
 $CLibPath = $null
 if ($CustomCLib -and !(Test-Path "$env:CustomCommonLibSSEPath/CMakeLists.txt" -PathType Leaf)) {
@@ -270,55 +290,88 @@ if ($CustomCLib) {
 	Write-Host "`tNone of the CLib paths is valid!`n`tOR`n`tIncorrect BOOTSTRAP" -ForegroundColor Red
 	Exit
 }
-$CMakeLists += "`nset(`ENV{CommonLibSSEPath} `"$($CLibPath -replace '\\', '/')`")`n"
-$CMakeLists += Add-Subdirectory "$($CLibType)CommonLib" '$ENV{CommonLibSSEPath} "CLib"'
-Write-Host "`t===> Rebasing $CLibType CLib <===" -ForegroundColor DarkYellow
+$CMakeLists.Add("`nset(`ENV{CommonLibSSEPath} `"$(Normalize $CLibPath)`")`n") | Out-Null
+$CMakeLists.Add((Add-Subdirectory "$($CLibType)CommonLib" '$ENV{CommonLibSSEPath} "CLib"')) | Out-Null
+Write-Host "`t===> Rebasing [$CLibType] CLib <===" -ForegroundColor DarkYellow
 Copy-Item "$PSScriptRoot/cmake/CLibCustomCMakeLists.txt.in" "$CLibPath/CMakeLists.txt" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
 
 
-# clean build folder
-Write-Host "`tCleaning build folder..."
-Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction:Ignore
+# @@CMake Targets & Dependencies
+# Enforce external find_package & target_link_library
+# Concern if not present in the target CMakeLists
+$AcceptedSubfolder = @('Library', 'Plugins')
+$ExcludedSubfolder = @('CommonLibSSE', 'Template')
+$Installed = @()
+Write-Host "`tBuilding CMake targets & dependencies...`n`t`t= [$Triplet]"
+if (!(Test-Path "$env:VCPKG_ROOT\vcpkg.exe" -PathType Leaf)) {
+	Write-Host "`tInvalid VCPKG_ROOT path!`n`tOR`n`tIncorrect BOOTSTRAP" -ForegroundColor Red
+	Exit
+}
+foreach ($subfolder in $AcceptedSubfolder) {
+	$CMakeLists.Add("`nset(GROUP `"$subfolder`")`n") | Out-Null
+	Get-ChildItem "$subfolder" -Directory | Where-Object {
+		($_.Name -notin $ExcludedSubfolder) -and
+		(Test-Path "$_/CMakeLists.txt" -PathType Leaf)
+	} | Resolve-Path -Relative | ForEach-Object {
+		$TargetCMake = [IO.File]::ReadAllText("$_/CMakeLists.txt")
+		$TargetLibraries = [regex]::match($TargetCMake, '(?s)(?:(?<=target_link_libraries\()(.*?)(?=\)))').Groups[1].Value.Trim() -split '\s+'
+		$TargetLibraries = $TargetLibraries[2 .. ($TargetLibraries.Count)]
+		$TargetPath = $_.Substring(2)
+		$TargetName = $_.Substring(10)
 
+		$vcpkg = [IO.File]::ReadAllText("$_/vcpkg.json") | ConvertFrom-Json
+		$Dependencies = $vcpkg.'dependencies'
+		if ($EnableDebugger -and $EnableDebugger.Contains($TargetName)) {
+			$TargetName += 'Debugger'
+		}
 
-# add subdirectories
-$Dependencies = @()
-Write-Host "`tBuilding CMake targets..."
-@('Library', 'Plugins') | ForEach-Object {
-	$CMakeLists += "`n`nset(GROUP `"$_`")`n"
-	Get-ChildItem "$_" -Directory -Exclude ('*CommonLibSSE*') | Resolve-Path -Relative | ForEach-Object {
-		if (Test-Path "$_/CMakeLists.txt" -PathType Leaf) {
-			$vcpkg = [IO.File]::ReadAllText("$_/vcpkg.json") | ConvertFrom-Json
-			$Dependencies += $vcpkg.'dependencies'
-			$CMakeLists += Add-Subdirectory $_.Substring(2) $_.Substring(2)
-			if ($_.EndsWith('DKUtil')) {
-				if ($DKDebug) {
-					$CMakeLists += "fipch(`"DKUtilDebugger`" `"$($_.Substring(2) -replace '\\', '/')`")`n"
+		$CMakeLists.Add((Add-Subdirectory $TargetPath $TargetPath)) | Out-Null
+		$CMakeLists.Add((Normalize "fipch(`"$TargetName`" `"$TargetPath`")`n")) | Out-Null
+
+		foreach ($dependency in $Dependencies) {
+			if (!$Installed.Contains($dependency)) {
+				Write-Host "`t`t! [Building] $dependency" -ForegroundColor Yellow -NoNewline
+			}
+			$BuildResult = & $env:VCPKG_ROOT\vcpkg install ${dependency}:$Triplet
+			$PackageInfo = $BuildResult[($BuildResult.Count - 5) .. ($BuildResult.Count - 2)].Trim()
+
+			if ($PackageInfo[0].Contains('CMake targets')) {
+				$Package = $PackageInfo[2] -split '\s+'
+				$PackageName = $Package[0].Substring(13)
+				if (!$TargetCMake.Contains($Package[0])) {
+					# assume package is present at this point
+					$CMakeLists.Insert(($CMakeLists.Count - 2), "$($Package[0]) $($Package[1]))") | Out-Null
+					$Concerns += "# $TargetPath : Missing $($Package[0]) $($Package[1])) or similar calls"
+				}
+
+				$Libraries = $PackageInfo[3].Substring(35).Substring(0, ($PackageInfo[3].Length - 36)) -split '\s+'
+				# full-module-wild
+				$Linked = $Libraries | Where-Object {$TargetLibraries -contains $_}
+				$Linked += $TargetLibraries -like ($PackageName + '::*')
+				$Linked += $TargetLibraries -contains $PackageName
+
+				if (!$Linked) {
+					$CMakeLists.Add((Normalize "link_external $TargetName $($Libraries[0])")) | Out-Null
+					$Concerns += "# $TargetPath : Missing one of [$($Libraries -join ' ')] in target_link_library call"
+					Write-Host "`r`t`t* [External] $dependency               " -ForegroundColor Green
+				}
+				
+				Write-Host "`r`t`t* [Internal] $dependency               " -ForegroundColor Green
+			} elseif ($PackageInfo[0].Contains('header only')) {
+				if (!$Installed.Contains($dependency)) {
+					Write-Host "`r`t`t* [Included] $dependency               " -ForegroundColor Green
 				}
 			} else {
-				$CMakeLists += "fipch(`"$($_.Substring(10))`" `"$($_.Substring(2) -replace '\\', '/')`")`n"
+				if (!$Installed.Contains($dependency)) {
+					Write-Host "`r`t`t!![Failed] $dependency               " -ForegroundColor Red
+				}
+				Write-Host $BuildResult
+				Exit
 			}
+			$Installed += $dependency
 		}
 	}
 }
-
-
-# build dependencies
-Write-Host "`tBuilding dependencies...`n`t`t= [$Triplet]"
-$Dependencies = $Dependencies | Select-Object -Unique | Sort-Object
-$Installed = Get-ChildItem -Path $env:VCPKG_ROOT\installed\$Triplet\share -Directory -Force -ErrorAction:SilentlyContinue
-foreach ($dependency in $Dependencies) {
-	if ($Installed -and $Installed.Name.Contains($dependency)) {
-		Write-Host "`t`t* [Installed] $dependency" -ForegroundColor Green
-	} else {
-		Write-Host "`t`t! [Building] $dependency" -ForegroundColor Red -NoNewline
-		& $env:VCPKG_ROOT\vcpkg install ${dependency}:$Triplet | Out-Null
-		Write-Host "`r`t`t* [Complete] $dependency               " -ForegroundColor Green
-	}
-}
-
-
-# CMakeLists.txt
 $Header = @((Get-Date -UFormat '# !Rebuild generated @ %R %B %d'), "# DKScriptVersion $env:DKScriptVersion")
 $Boiler = [IO.File]::ReadAllLines("$PSScriptRoot/cmake/CMakeLists.txt.in")
 $CMakeLists = $Header + $Boiler + $CMakeLists
@@ -328,20 +381,26 @@ $CMakeLists = $Header + $Boiler + $CMakeLists
 # @@WhatIf
 if ($WhatIf) {
 	Write-Host "`tPrebuild complete" -ForegroundColor Green
+	Show-Concerns
 	Invoke-Item "$PSScriptRoot/CMakeLists.txt"
 	Exit
 }
 
 
-# cmake generator
+# @@CMake Generator
+Write-Host "`tCleaning build folder..."
+Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction:Ignore
+
 Write-Host "`tBuilding solution..."
-$Options = @(
-	"-DDKUTIL_DEBUG_BUILD:BOOL=$([Int32][bool]$DKDebug)",
-	"-DANNIVERSARY_EDITION:BOOL=$([Int32][bool]$ANNIVERSARY_EDITION)",
+$Arguments = @(
+	"-DANNIVERSARY_EDITION:BOOL=$([Int32][bool ]$ANNIVERSARY_EDITION)",
 	"-DMTD:BOOL=$([Int32]$MTD)"
 )
+foreach ($enableDebugger in $EnableDebugger) {
+	$Arguments += "-D$($enabledDebugger)_DEBUG_BUILD:BOOL=1"
+}
 $CurProject = $null
-$CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot $Options | ForEach-Object {
+$CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot $Arguments | ForEach-Object {
 	if ($_.StartsWith('-- Rebuilding ') -and !($_.EndsWith(' - Complete'))) {
 		$CurProject = $_.Substring(14)
 		Write-Host "`t`t! [Building] $CurProject" -ForegroundColor Yellow -NoNewline
@@ -355,9 +414,10 @@ $CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot $Options | ForEach-
 }
 
 if ($CMake[-2] -ne '-- Generating done') {
-	Write-Host "`tRebuild failed" -ForegroundColor Red
+	Write-Host "`tRebuild failed!" -ForegroundColor Red
 } else {
-	Write-Host "`tRebuild complete" -ForegroundColor Green
+	Write-Host "`tRebuild complete!" -ForegroundColor Green
 	Invoke-Item "$PSScriptRoot/Build"
 }
 
+Show-Concerns
