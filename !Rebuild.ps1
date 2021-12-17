@@ -6,14 +6,13 @@ param(
 	[ValidateSet('AE', 'SE')][string]$Mode1,
 	[Alias('C', 'Custom')][switch]$CustomCLib,
 	[switch]$WhatIf,
-	[switch]$DKDebug
+	[string[]]$EnableDebugger
 )
 
 $ErrorActionPreference = 'Stop'
 
-$env:DKScriptVersion = '11211'
-$env:BuildConfig = $Mode0
-$env:BuildTarget = $Mode1
+$env:DKScriptVersion = '11217'
+$env:RebuildInvoke = $true
 
 Write-Host "`tDKScriptVersion $env:DKScriptVersion`t$Mode0`t$Mode1`n"
 [IO.Directory]::SetCurrentDirectory($PSScriptRoot)
@@ -35,9 +34,9 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		$scriptCert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Subject -eq 'CN=DKScriptSelfCert' }
 		if (!$scriptCert) {
 			$authenticode = New-SelfSignedCertificate -Subject 'DKScriptSelfCert' -CertStoreLocation Cert:\LocalMachine\My -Type CodeSigningCert
-			foreach($store in @('Root', 'TrustedPublisher')) {
-				$Cert = [System.Security.Cryptography.X509Certificates.X509Store]::new($store, 'LocalMachine')
-				$Cert.Open('ReadWrite')
+			foreach($store in @([System.Security.Cryptography.X509Certificates.StoreName]::Root, [System.Security.Cryptography.X509Certificates.StoreName]::TrustedPublisher)) {
+				$Cert = [System.Security.Cryptography.X509Certificates.X509Store]::new($store, [System.Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine)
+				$Cert.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
 				$Cert.Add($authenticode)
 				$Cert.Close()
 			}
@@ -67,7 +66,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 
 	Write-Host "`tBOOTSTRAP starting, please wait..." -ForegroundColor Red -NoNewline
 	foreach ($env in @('CommonLibSSEPath', 'CustomCommonLibSSEPath', 'DKUtilPath', 'SkyrimSEPath', 'SkyrimAEPath', 'MO2SkyrimSEPath', 'MO2SkyrimAEPath', 'SKSETemplatePath', 'SKSEPluginAuthor')) {
-		Start-Job {[Environment]::SetEnvironmentVariable($using:env, $null, 'Machine')} | Out-Null
+		Start-Job {[Environment]::SetEnvironmentVariable($using:env, $null, [System.EnvironmentVariableTarget]::Machine)} | Out-Null
 	}
 	Get-Job | Wait-Job | Out-Null
 	Write-Host "`r`tBOOTSTRAP initiated!               " -ForegroundColor Yellow
@@ -97,7 +96,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 				Push-Location $using:CurrentEnv
 				& git checkout -f master -q
 				Pop-Location
-				[System.Environment]::SetEnvironmentVariable($using:EnvName, $using:CurrentEnv, 'Machine')
+				[System.Environment]::SetEnvironmentVariable($using:EnvName, $using:CurrentEnv, [System.EnvironmentVariableTarget]::Machine)
 			} | Out-Null
 			Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
 		}
@@ -123,7 +122,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 					$CurrentEnv = Split-Path $SkyrimFile.Filename
 					Write-Host "`r`t* Located $GameName               " -ForegroundColor Green
 					Write-Host "`t`t- Mapping path, please wait..." -NoNewline
-					Start-Job {[System.Environment]::SetEnvironmentVariable($using:EnvName, $using:CurrentEnv, 'Machine')} | Out-Null
+					Start-Job {[System.Environment]::SetEnvironmentVariable($using:EnvName, $using:CurrentEnv, [System.EnvironmentVariableTarget]::Machine)} | Out-Null
 					Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
 					break
 				} else {
@@ -143,7 +142,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 				if (Test-Path "$($MO2Dir.SelectedPath)/mods" -PathType Container) {
 					Write-Host "`tMapping path, please wait..." -NoNewline
 					$MO2Dir = $MO2Dir.SelectedPath
-					Start-Job {[System.Environment]::SetEnvironmentVariable($using:MO2EnvName, $using:MO2Dir, 'Machine')} | Out-Null
+					Start-Job {[System.Environment]::SetEnvironmentVariable($using:MO2EnvName, $using:MO2Dir, [System.EnvironmentVariableTarget]::Machine)} | Out-Null
 					Write-Host "`r`t* Enabled MO2 support for $GameName               " -ForegroundColor Green
 					break
 				} else {
@@ -174,7 +173,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		if (Test-Path "$($CustomCLibDir.SelectedPath)/CMakeLists.txt" -PathType Leaf) {
 			Write-Host "`n`t* Enabled custom CommonLib" -ForegroundColor Green
 			$CustomCLibDir = $CustomCLibDir.SelectedPath
-			Start-Job {[System.Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $using:CustomCLibDir, 'Machine')} | Out-Null
+			Start-Job {[System.Environment]::SetEnvironmentVariable('CustomCommonLibSSEPath', $using:CustomCLibDir, [System.EnvironmentVariableTarget]::Machine)} | Out-Null
 			Write-Host "`t`t- CustomCommonLibSSEPath has been set to [$($CustomCLibDir)]"
 			Write-Host "`t`t# To use custom CommonLib in build, append switch parameter '-C', '-Custom', or '-CustomCLib' to the !Rebuild command."
 			break
@@ -199,14 +198,17 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	while (!$Author) {
 		$Author = [Microsoft.VisualBasic.Interaction]::InputBox("Input the plugin author name:`n`nThis cannot be null", 'Author', 'ToddHoward')
 	}
-	Start-Job {[System.Environment]::SetEnvironmentVariable('SKSEPluginAuthor', $using:Author, 'Machine')} | Out-Null
+	Start-Job {[System.Environment]::SetEnvironmentVariable('SKSEPluginAuthor', $using:Author, [System.EnvironmentVariableTarget]::Machine)} | Out-Null
 	Write-Host "`n`t* Plugin author: $Author" -ForegroundColor Magenta
 
 	Write-Host "`n`t>>> Bootstrapping finishing up... <<<" -ForegroundColor Green
+	$Path = [System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::Machine)
+	$Path += ";$PSScriptRoot"
+	[System.Environment]::SetEnvironmentVariable('Path', $Path, [System.EnvironmentVariableTarget]::Machine);
 	Get-Job | Wait-Job | Out-Null
 	Get-Job | Remove-Job | Out-Null
 
-	$env:VCPKG_ROOT = [System.Environment]::GetEnvironmentVariable('VCPKG_ROOT', 'Machine')
+	$env:VCPKG_ROOT = [System.Environment]::GetEnvironmentVariable('VCPKG_ROOT', [System.EnvironmentVariableTarget]::Machine)
 	& $env:VCPKG_ROOT\bootstrap-vcpkg.bat | Out-Null
 	& $env:VCPKG_ROOT\vcpkg.exe integrate install | Out-Null
 
@@ -215,7 +217,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 }
 
 
-# @@Build Config
+# @@Build Linkage
 $Triplet = $null
 $MTD = ($Mode0 -ne 'MT')
 if ($MTD) {
@@ -240,13 +242,33 @@ if ($ANNIVERSARY_EDITION -and $env:SkyrimAEPath) {
 }
 
 
+function Normalize ($text) {
+	return $text -replace '\\', '/'
+}
+
+
 function Add-Subdirectory ($Name, $Path) {
-	return "message(CHECK_START `"Rebuilding $($Name -replace '\\', '/')`")`nadd_subdirectory($($Path -replace '\\', '/'))`nmessage(CHECK_PASS `"Complete`")"
+	return Normalize "message(CHECK_START `"Rebuilding $Name`")`nadd_subdirectory($Path)`nmessage(CHECK_PASS `"Complete`")"
+}
+
+
+$Concerns = @()
+function Show-Concerns {
+	if (!$Concerns.Count) {
+		return
+	}
+
+	Write-Host "`n`tFollowing concerns regarding the vcpkg dependencies: "
+	foreach ($concern in $Concerns) {
+		Write-Host "`n`t $concern"
+	}
+
+	Write-Host "`tThese concerns have been *resolved* by !Rebuild`n`tHowever, it is suggested to modify the target CMakeLists.txt to address these concerns" -ForegroundColor Yellow
 }
 
 
 # @@CLib
-$CMakeLists = @()
+$CMakeLists = [System.Collections.ArrayList]::new(128)
 $CLibType = $null
 $CLibPath = $null
 if ($CustomCLib -and !(Test-Path "$env:CustomCommonLibSSEPath/CMakeLists.txt" -PathType Leaf)) {
@@ -271,55 +293,96 @@ if ($CustomCLib) {
 	Write-Host "`tNone of the CLib paths is valid!`n`tOR`n`tIncorrect BOOTSTRAP" -ForegroundColor Red
 	Exit
 }
-$CMakeLists += "`nset(`ENV{CommonLibSSEPath} `"$($CLibPath -replace '\\', '/')`")`n"
-$CMakeLists += Add-Subdirectory "$($CLibType)CommonLib" '$ENV{CommonLibSSEPath} "CLib"'
-Write-Host "`t===> Rebasing $CLibType CLib <===" -ForegroundColor DarkYellow
+$CMakeLists.Add("`nset(`ENV{CommonLibSSEPath} `"$(Normalize $CLibPath)`")`n") | Out-Null
+$CMakeLists.Add((Add-Subdirectory "$($CLibType)CommonLib" '$ENV{CommonLibSSEPath} "CLib"')) | Out-Null
+Write-Host "`t===> Rebasing [$CLibType] CLib <===" -ForegroundColor DarkYellow
 Copy-Item "$PSScriptRoot/cmake/CLibCustomCMakeLists.txt.in" "$CLibPath/CMakeLists.txt" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
 
 
-# clean build folder
-Write-Host "`tCleaning build folder..."
-Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction:Ignore
+# @@CMake Targets & Dependencies
+# Enforce external find_package & target_link_library
+# Concern if not present in the target CMakeLists
+$AcceptedSubfolder = @('Library', 'Plugins')
+$ExcludedSubfolder = @('CommonLibSSE', 'Template')
+$Installed = @()
+Write-Host "`tBuilding CMake targets & dependencies...`n`t`t= [$Triplet]"
+if (!(Test-Path "$env:VCPKG_ROOT\vcpkg.exe" -PathType Leaf)) {
+	Write-Host "`tInvalid VCPKG_ROOT path!`n`tOR`n`tIncorrect BOOTSTRAP" -ForegroundColor Red
+	Exit
+}
+foreach ($subfolder in $AcceptedSubfolder) {
+	$CMakeLists.Add("`nset(GROUP `"$subfolder`")`n") | Out-Null
+	Get-ChildItem "$subfolder" -Directory | Where-Object {
+		($_.Name -notin $ExcludedSubfolder) -and
+		(Test-Path "$_/CMakeLists.txt" -PathType Leaf)
+	} | Resolve-Path -Relative | ForEach-Object {
+		$TargetCMake = [IO.File]::ReadAllText("$_/CMakeLists.txt")
+		$TargetLibraries = [regex]::match($TargetCMake, '(?s)(?:(?<=target_link_libraries\()(.*?)(?=\)))').Groups[1].Value.Trim() -split '\s+'
+		$TargetLibraries = $TargetLibraries[2 .. ($TargetLibraries.Count)]
+		$TargetPath = $_.Substring(2)
+		$TargetName = $_.Substring(10)
 
+		$vcpkg = [IO.File]::ReadAllText("$_/vcpkg.json") | ConvertFrom-Json
+		$Dependencies = $vcpkg.'dependencies'
+		if ($EnableDebugger -and $EnableDebugger.Contains($TargetName)) {
+			$TargetName += 'Debugger'
+		}
 
-# add subdirectories
-$Dependencies = @()
-Write-Host "`tBuilding CMake targets..."
-@('Library', 'Plugins') | ForEach-Object {
-	$CMakeLists += "`n`nset(GROUP `"$_`")`n"
-	Get-ChildItem "$_" -Directory -Exclude ('*CommonLibSSE*') | Resolve-Path -Relative | ForEach-Object {
-		if (Test-Path "$_/CMakeLists.txt" -PathType Leaf) {
-			$vcpkg = [IO.File]::ReadAllText("$_/vcpkg.json") | ConvertFrom-Json
-			$Dependencies += $vcpkg.'dependencies'
-			$CMakeLists += Add-Subdirectory $_.Substring(2) $_.Substring(2)
-			if ($_.EndsWith('DKUtil')) {
-				if ($DKDebug) {
-					$CMakeLists += "fipch(`"DKUtilDebugger`" `"$($_.Substring(2) -replace '\\', '/')`")`n"
+		$CMakeLists.Add((Add-Subdirectory $TargetPath $TargetPath)) | Out-Null
+		$CMakeLists.Add((Normalize "fipch($TargetName $TargetPath)`n")) | Out-Null
+
+		foreach ($dependency in $Dependencies) {
+			if (!$Installed.Contains($dependency)) {
+				Write-Host "`t`t! [Building] $dependency" -ForegroundColor Yellow -NoNewline
+			}
+			$BuildResult = & $env:VCPKG_ROOT\vcpkg install ${dependency}:$Triplet
+			$PackageInfo = $BuildResult[($BuildResult.Count - 5) .. ($BuildResult.Count - 2)].Trim()
+
+			if ($PackageInfo[0].Contains('CMake targets')) {
+				# process each library package
+				$Package = $PackageInfo[2] -split '\s+'
+				$PackageName = $Package[0].Substring(13)
+				if (!$TargetCMake.Contains($Package[0])) {
+					# assume package is present at this point
+					$CMakeLists.Insert(($CMakeLists.Count - 2), "$($Package[0]) $($Package[1]))") | Out-Null
+					$Concerns += "# $TargetPath : Missing $($Package[0]) $($Package[1])) or similar calls"
+				}
+
+				$Libraries = $PackageInfo[3].Substring(35).Substring(0, ($PackageInfo[3].Length - 36)) -split '\s+'
+				# full-module-wild
+				$Linked = $Libraries | Where-Object {$TargetLibraries -contains $_}
+				$Linked += $TargetLibraries -like ($PackageName + '::*')
+				$Linked += $TargetLibraries -contains $PackageName
+
+				if (!$Linked) {
+					$CMakeLists.Add((Normalize "link_external($TargetName $($Libraries[0]))")) | Out-Null
+					$Concerns += "# $TargetPath : Missing one of [$($Libraries -join ' ')] in target_link_libraries call"
+					Write-Host "`r`t`t* [LinkedExt] $dependency               " -ForegroundColor Green
+				}
+
+				if (!$Installed.Contains($dependency)) {
+					Write-Host "`r`t`t* [Installed] $dependency               " -ForegroundColor Green
+				}
+			} elseif ($PackageInfo[0].Contains('header only')) {
+				# skip scanning cmakelists for header only package
+				# enforce include anyway
+				$Header = ($PackageInfo[2] -split '\s+')[0].Substring(10)
+				if (!$Installed.Contains($dependency)) {
+					$CMakeLists.Insert(($CMakeLists.Count - 2), "$($PackageInfo[2])") | Out-Null
+					$CMakeLists.Add((Normalize "include_external($TargetName $Header)")) | Out-Null
+					Write-Host "`r`t`t* [HeaderLib] $dependency               " -ForegroundColor Green
 				}
 			} else {
-				$CMakeLists += "fipch(`"$($_.Substring(10))`" `"$($_.Substring(2) -replace '\\', '/')`")`n"
+				if (!$Installed.Contains($dependency)) {
+					Write-Host "`r`t`t!![Failed] $dependency               " -ForegroundColor Red
+				}
+				Write-Host $BuildResult
+				Exit
 			}
+			$Installed += $dependency
 		}
 	}
 }
-
-
-# build dependencies
-Write-Host "`tBuilding dependencies...`n`t`t= [$Triplet]"
-$Dependencies = $Dependencies | Select-Object -Unique | Sort-Object
-$Installed = Get-ChildItem -Path $env:VCPKG_ROOT\installed\$Triplet\share -Directory -Force -ErrorAction:SilentlyContinue
-foreach ($dependency in $Dependencies) {
-	if ($Installed -and $Installed.Name.Contains($dependency)) {
-		Write-Host "`t`t* [Installed] $dependency" -ForegroundColor Green
-	} else {
-		Write-Host "`t`t! [Building] $dependency" -ForegroundColor Red -NoNewline
-		& $env:VCPKG_ROOT\vcpkg install ${dependency}:$Triplet | Out-Null
-		Write-Host "`r`t`t* [Complete] $dependency               " -ForegroundColor Green
-	}
-}
-
-
-# CMakeLists.txt
 $Header = @((Get-Date -UFormat '# !Rebuild generated @ %R %B %d'), "# DKScriptVersion $env:DKScriptVersion")
 $Boiler = [IO.File]::ReadAllLines("$PSScriptRoot/cmake/CMakeLists.txt.in")
 $CMakeLists = $Header + $Boiler + $CMakeLists
@@ -329,20 +392,26 @@ $CMakeLists = $Header + $Boiler + $CMakeLists
 # @@WhatIf
 if ($WhatIf) {
 	Write-Host "`tPrebuild complete" -ForegroundColor Green
+	Show-Concerns
 	Invoke-Item "$PSScriptRoot/CMakeLists.txt"
 	Exit
 }
 
 
-# cmake generator
+# @@CMake Generator
+Write-Host "`tCleaning build folder..."
+Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction:Ignore
+
 Write-Host "`tBuilding solution..."
-$Options = @(
-	"-DDKUTIL_DEBUG_BUILD:BOOL=$([Int32][bool]$DKDebug)",
-	"-DANNIVERSARY_EDITION:BOOL=$([Int32][bool]$ANNIVERSARY_EDITION)",
+$Arguments = @(
+	"-DANNIVERSARY_EDITION:BOOL=$([Int32][bool ]$ANNIVERSARY_EDITION)",
 	"-DMTD:BOOL=$([Int32]$MTD)"
 )
+foreach ($enableDebugger in $EnableDebugger) {
+	$Arguments += "-D$($enabledDebugger)_DEBUG_BUILD:BOOL=1"
+}
 $CurProject = $null
-$CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot $Options | ForEach-Object {
+$CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot $Arguments | ForEach-Object {
 	if ($_.StartsWith('-- Rebuilding ') -and !($_.EndsWith(' - Complete'))) {
 		$CurProject = $_.Substring(14)
 		Write-Host "`t`t! [Building] $CurProject" -ForegroundColor Yellow -NoNewline
@@ -356,9 +425,10 @@ $CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot $Options | ForEach-
 }
 
 if ($CMake[-2] -ne '-- Generating done') {
-	Write-Host "`tRebuild failed" -ForegroundColor Red
+	Write-Host "`tRebuild failed!" -ForegroundColor Red
 } else {
-	Write-Host "`tRebuild complete" -ForegroundColor Green
+	Write-Host "`tRebuild complete!" -ForegroundColor Green
 	Invoke-Item "$PSScriptRoot/Build"
-}
 
+	Show-Concerns
+}

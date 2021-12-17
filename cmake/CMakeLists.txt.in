@@ -24,11 +24,34 @@ endif()
 execute_process(COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/!Update.ps1" "DISTRIBUTE")
 
 macro(fipch target_project)
+get_target_property(target_type ${target_project} TYPE)
+if (NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
 	target_compile_options(
 		${target_project}
 		PRIVATE
 			/FI${CMAKE_BINARY_DIR}/${GROUP}/${target_project}/CMakeFiles/${target_project}.dir/$<CONFIG>/cmake_pch.hxx
 	)
+endif()
+endmacro()
+
+macro(link_external target_project target_library)
+if (NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
+	target_link_libraries(
+		${target_project}
+		PRIVATE
+			${target_library}
+	)
+endif()
+endmacro()
+
+macro(include_external target_project target_directory)
+if (NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
+	target_include_directories(
+		${target_project}
+		PRIVATE
+			${target_directory}
+	)
+endif()
 endmacro()
 
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
@@ -36,6 +59,8 @@ set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
 
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+
+find_package(xbyak CONFIG REQUIRED)
 
 add_compile_options(
 	/MP
