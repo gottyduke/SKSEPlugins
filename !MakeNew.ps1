@@ -50,9 +50,10 @@ if (Test-Path "$env:SKSETemplatePath/CMakeLists.txt" -PathType Leaf) {
 Copy-Item "$env:SKSETemplatePath/cmake" "$Path/$Name/cmake" -Recurse -Force
 Copy-Item "$env:SKSETemplatePath/src" "$Path/$Name/src" -Recurse -Force
 Copy-Item "$env:SKSETemplatePath/CMakeLists.txt" "$Path/$Name/CMakeLists.txt" -Force
+Copy-Item "$env:SKSETemplatePath/.gitignore" "$Path/$Name/.gitignore" -Force
 
 # Author name
-$main = [IO.File]::ReadAllText("$Path/$Name/src/main.cpp") -replace 'Dropkicker', $env:SKSEPluginAuthor
+$main = [IO.File]::ReadAllText("$Path/$Name/src/main.cpp") -replace 'PluginAuthorName', $env:SKSEPluginAuthor
 [IO.File]::WriteAllLines("$Path/$Name/src/main.cpp", $main)
 
 # generate vcpkg.json
