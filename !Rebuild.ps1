@@ -16,6 +16,7 @@ $env:BuildConfig = $Mode0
 $env:BuildTarget = $Mode1
 
 Write-Host "`tDKScriptVersion $env:DKScriptVersion`t$Mode0`t$Mode1`n"
+[IO.Directory]::SetCurrentDirectory($PSScriptRoot)
 
 
 # @@BOOTSTRAP
