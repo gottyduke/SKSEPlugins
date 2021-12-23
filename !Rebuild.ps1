@@ -11,7 +11,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$env:DKScriptVersion = '11217'
+$env:DKScriptVersion = '11222'
 $env:RebuildInvoke = $true
 
 Write-Host "`tDKScriptVersion $env:DKScriptVersion`t$Mode0`t$Mode1`n"
@@ -46,7 +46,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			Set-AuthenticodeSignature "$PSScriptRoot/$_" -Certificate $scriptCert -TimeStampServer 'http://timestamp.digicert.com' | Out-Null
 		}
 
-		$Signature = Get-AuthenticodeSignature "$PSScriptRoot\!Rebuild.ps1"
+		$Signature = Get-AuthenticodeSignature "$PSScriptRoot/!Rebuild.ps1"
 		if ($Signature.Status -ne 'Valid') {
 			Write-Host "`r`t! Failed to complete self signing procecss!  " -ForegroundColor Red
 			Exit
@@ -202,9 +202,6 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	Write-Host "`n`t* Plugin author: $Author" -ForegroundColor Magenta
 
 	Write-Host "`n`t>>> Bootstrapping finishing up... <<<" -ForegroundColor Green
-	$Path = [System.Environment]::GetEnvironmentVariable('Path', [System.EnvironmentVariableTarget]::Machine)
-	$Path += ";$PSScriptRoot"
-	[System.Environment]::SetEnvironmentVariable('Path', $Path, [System.EnvironmentVariableTarget]::Machine);
 	Get-Job | Wait-Job | Out-Null
 	Get-Job | Remove-Job | Out-Null
 
@@ -303,83 +300,87 @@ Copy-Item "$PSScriptRoot/cmake/CLibCustomCMakeLists.txt.in" "$CLibPath/CMakeList
 # Enforce external find_package & target_link_library
 # Concern if not present in the target CMakeLists
 $AcceptedSubfolder = @('Library', 'Plugins')
-$ExcludedSubfolder = @('CommonLibSSE', 'Template')
+$ExcludedSubfolder = @('Template')
 $Installed = @()
 Write-Host "`tBuilding CMake targets & dependencies...`n`t`t= [$Triplet]"
-if (!(Test-Path "$env:VCPKG_ROOT\vcpkg.exe" -PathType Leaf)) {
+if (!(Test-Path "$env:VCPKG_ROOT/vcpkg.exe" -PathType Leaf)) {
 	Write-Host "`tInvalid VCPKG_ROOT path!`n`tOR`n`tIncorrect BOOTSTRAP" -ForegroundColor Red
 	Exit
 }
 foreach ($subfolder in $AcceptedSubfolder) {
 	$CMakeLists.Add("`nset(GROUP `"$subfolder`")`n") | Out-Null
 	Get-ChildItem "$subfolder" -Directory | Where-Object {
-		($_.Name -notin $ExcludedSubfolder) -and
-		(Test-Path "$_/CMakeLists.txt" -PathType Leaf)
+		$_.Name -notin $ExcludedSubfolder
 	} | Resolve-Path -Relative | ForEach-Object {
-		$TargetCMake = [IO.File]::ReadAllText("$_/CMakeLists.txt")
-		$TargetLibraries = [regex]::match($TargetCMake, '(?s)(?:(?<=target_link_libraries\()(.*?)(?=\)))').Groups[1].Value.Trim() -split '\s+'
-		$TargetLibraries = $TargetLibraries[2 .. ($TargetLibraries.Count)]
-		$TargetPath = $_.Substring(2)
-		$TargetName = $_.Substring(10)
-
-		$vcpkg = [IO.File]::ReadAllText("$_/vcpkg.json") | ConvertFrom-Json
-		$Dependencies = $vcpkg.'dependencies'
-		if ($EnableDebugger -and $EnableDebugger.Contains($TargetName)) {
-			$TargetName += 'Debugger'
-		}
-
-		$CMakeLists.Add((Add-Subdirectory $TargetPath $TargetPath)) | Out-Null
-		$CMakeLists.Add((Normalize "fipch($TargetName $TargetPath)`n")) | Out-Null
-
-		foreach ($dependency in $Dependencies) {
-			if (!$Installed.Contains($dependency)) {
-				Write-Host "`t`t! [Building] $dependency" -ForegroundColor Yellow -NoNewline
+		if (Test-Path "$_/CMakeLists.txt" -PathType Leaf) {
+			$TargetCMake = [IO.File]::ReadAllText("$_/CMakeLists.txt")
+			$TargetLibraries = [regex]::match($TargetCMake, '(?s)(?:(?<=target_link_libraries\()(.*?)(?=\)))').Groups[1].Value.Trim() -split '\s+'
+			$TargetLibraries = $TargetLibraries[2 .. ($TargetLibraries.Count)]
+			$TargetPath = $_.Substring(2)
+			$TargetName = $_.Substring(10)
+	
+			$vcpkg = [IO.File]::ReadAllText("$_/vcpkg.json") | ConvertFrom-Json
+			$Dependencies = $vcpkg.'dependencies'
+			if ($EnableDebugger -and $EnableDebugger.Contains($TargetName)) {
+				$TargetName += 'Debugger'
 			}
-			$BuildResult = & $env:VCPKG_ROOT\vcpkg install ${dependency}:$Triplet
-			$PackageInfo = $BuildResult[($BuildResult.Count - 5) .. ($BuildResult.Count - 2)].Trim()
-
-			if ($PackageInfo[0].Contains('CMake targets')) {
-				# process each library package
-				$Package = $PackageInfo[2] -split '\s+'
-				$PackageName = $Package[0].Substring(13)
-				if (!$TargetCMake.Contains($Package[0])) {
-					# assume package is present at this point
-					$CMakeLists.Insert(($CMakeLists.Count - 2), "$($Package[0]) $($Package[1]))") | Out-Null
-					$Concerns += "# $TargetPath : Missing $($Package[0]) $($Package[1])) or similar calls"
-				}
-
-				$Libraries = $PackageInfo[3].Substring(35).Substring(0, ($PackageInfo[3].Length - 36)) -split '\s+'
-				# full-module-wild
-				$Linked = $Libraries | Where-Object {$TargetLibraries -contains $_}
-				$Linked += $TargetLibraries -like ($PackageName + '::*')
-				$Linked += $TargetLibraries -contains $PackageName
-
-				if (!$Linked) {
-					$CMakeLists.Add((Normalize "link_external($TargetName $($Libraries[0]))")) | Out-Null
-					$Concerns += "# $TargetPath : Missing one of [$($Libraries -join ' ')] in target_link_libraries call"
-					Write-Host "`r`t`t* [LinkedExt] $dependency               " -ForegroundColor Green
-				}
-
-				if (!$Installed.Contains($dependency)) {
-					Write-Host "`r`t`t* [Installed] $dependency               " -ForegroundColor Green
-				}
-			} elseif ($PackageInfo[0].Contains('header only')) {
-				# skip scanning cmakelists for header only package
-				# enforce include anyway
-				$Header = ($PackageInfo[2] -split '\s+')[0].Substring(10)
-				if (!$Installed.Contains($dependency)) {
-					$CMakeLists.Insert(($CMakeLists.Count - 2), "$($PackageInfo[2])") | Out-Null
-					$CMakeLists.Add((Normalize "include_external($TargetName $Header)")) | Out-Null
-					Write-Host "`r`t`t* [HeaderLib] $dependency               " -ForegroundColor Green
-				}
-			} else {
-				if (!$Installed.Contains($dependency)) {
-					Write-Host "`r`t`t!![Failed] $dependency               " -ForegroundColor Red
-				}
-				Write-Host $BuildResult
-				Exit
+	
+			$CMakeLists.Add((Add-Subdirectory $TargetPath $TargetPath)) | Out-Null
+			if ($TargetName -ne 'CommonLibSSE') {
+				$CMakeLists.Add((Normalize "fipch($TargetName $TargetPath)")) | Out-Null
 			}
-			$Installed += $dependency
+	
+			foreach ($dependency in $Dependencies) {
+				if (!$Installed.Contains($dependency)) {
+					Write-Host "`t`t! [Building] $dependency" -ForegroundColor Yellow -NoNewline
+				}
+				$BuildResult = & $env:VCPKG_ROOT/vcpkg install ${dependency}:$Triplet
+				$PackageInfo = $BuildResult[($BuildResult.Count - 5) .. ($BuildResult.Count - 2)].Trim()
+	
+				if ($PackageInfo[0].Contains('CMake targets')) {
+					# process each library package
+					$Package = $PackageInfo[2] -split '\s+'
+					$PackageName = $Package[0].Substring(13)
+					if (!$TargetCMake.Contains($Package[0])) {
+						# assume package is present at this point
+						$CMakeLists.Insert(($CMakeLists.Count - 2), "$($Package[0]) $($Package[1]))") | Out-Null
+						$Concerns += "# $TargetPath : Missing $($Package[0]) $($Package[1])) or similar calls"
+					}
+	
+					$Libraries = $PackageInfo[3].Substring(35).Substring(0, ($PackageInfo[3].Length - 36)) -split '\s+'
+					# full-module-wild
+					$Linked = $Libraries | Where-Object {$TargetLibraries -contains $_}
+					$Linked += $TargetLibraries -like ($PackageName + '::*')
+					$Linked += $TargetLibraries -contains $PackageName
+	
+					if (!$Linked.Count) {
+						$CMakeLists.Add((Normalize "link_external($TargetName $($Libraries[0]))")) | Out-Null
+						$Concerns += "# $TargetPath : Missing one of [$($Libraries -join ' ')] in target_link_libraries call"
+						Write-Host "`r`t`t* [LinkedExt] $dependency               " -ForegroundColor Green
+					}
+	
+					if (!$Installed.Contains($dependency)) {
+						Write-Host "`r`t`t* [Installed] $dependency               " -ForegroundColor Green
+					}
+				} elseif ($PackageInfo[0].Contains('header only')) {
+					# skip scanning cmakelists for header only package
+					# enforce include anyway
+					$Header = ($PackageInfo[2] -split '\s+')[0].Substring(10)
+					if (!$Installed.Contains($dependency)) {
+						$CMakeLists.Insert(($CMakeLists.Count - 2), "$($PackageInfo[2])") | Out-Null
+						$CMakeLists.Add((Normalize "include_external($TargetName $Header)")) | Out-Null
+						Write-Host "`r`t`t* [HeaderLib] $dependency               " -ForegroundColor Green
+					}
+				} else {
+					if (!$Installed.Contains($dependency)) {
+						Write-Host "`r`t`t!![Failed] $dependency               " -ForegroundColor Red
+					}
+					Write-Host $BuildResult
+					Exit
+				}
+				$Installed += $dependency
+			}
+			$CMakeLists.Add((Normalize "include_external($TargetName `"$PSScriptRoot/Build/$TargetPath`")`n")) | Out-Null
 		}
 	}
 }
@@ -387,6 +388,15 @@ $Header = @((Get-Date -UFormat '# !Rebuild generated @ %R %B %d'), "# DKScriptVe
 $Boiler = [IO.File]::ReadAllLines("$PSScriptRoot/cmake/CMakeLists.txt.in")
 $CMakeLists = $Header + $Boiler + $CMakeLists
 [IO.File]::WriteAllLines("$PSScriptRoot/CMakeLists.txt", $CMakeLists)
+
+
+# @@Debugger
+if ($EnableDebugger.Count) {
+	Write-Host "`tEnabled debugger:"
+	foreach ($enabledDebugger in $EnableDebugger) {
+		Write-Host "`t`t- $enabledDebugger"
+	}
+}
 
 
 # @@WhatIf
@@ -407,17 +417,18 @@ $Arguments = @(
 	"-DANNIVERSARY_EDITION:BOOL=$([Int32][bool ]$ANNIVERSARY_EDITION)",
 	"-DMTD:BOOL=$([Int32]$MTD)"
 )
-foreach ($enableDebugger in $EnableDebugger) {
-	$Arguments += "-D$($enabledDebugger)_DEBUG_BUILD:BOOL=1"
+foreach ($enabledDebugger in $EnableDebugger) {
+	$Arguments += "-D$($enabledDebugger.ToUpper())_DEBUG_BUILD:BOOL=1"
 }
 $CurProject = $null
-$CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot $Arguments | ForEach-Object {
+$Failed = $false
+$CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot $Arguments | Where-Object {!$Failed} | ForEach-Object {
 	if ($_.StartsWith('-- Rebuilding ') -and !($_.EndsWith(' - Complete'))) {
 		$CurProject = $_.Substring(14)
 		Write-Host "`t`t! [Building] $CurProject" -ForegroundColor Yellow -NoNewline
 	} elseif ($_.Contains('CMake Error')) {
 		Write-Host "`r`t`t* [Failed] $CurProject               " -ForegroundColor Red
-		break
+		$Failed = $true
 	} elseif ($_.StartsWith('-- Rebuilding ') -and $_.EndsWith(' - Complete')) {
 		Write-Host "`r`t`t* [Complete] $CurProject               " -ForegroundColor Cyan
 	}

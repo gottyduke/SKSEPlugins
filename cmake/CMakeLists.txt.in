@@ -23,19 +23,19 @@ endif()
 # update script for sourcelist.cmake generation
 execute_process(COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/!Update.ps1" "DISTRIBUTE")
 
-macro(fipch target_project)
+macro(fipch target_project target_int_dir)
 get_target_property(target_type ${target_project} TYPE)
-if (NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
+if(NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
 	target_compile_options(
 		${target_project}
 		PRIVATE
-			/FI${CMAKE_BINARY_DIR}/${GROUP}/${target_project}/CMakeFiles/${target_project}.dir/$<CONFIG>/cmake_pch.hxx
+			/FI${CMAKE_BINARY_DIR}/${target_int_dir}/CMakeFiles/${target_project}.dir/$<CONFIG>/cmake_pch.hxx
 	)
 endif()
 endmacro()
 
 macro(link_external target_project target_library)
-if (NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
+if(NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
 	target_link_libraries(
 		${target_project}
 		PRIVATE
@@ -45,7 +45,7 @@ endif()
 endmacro()
 
 macro(include_external target_project target_directory)
-if (NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
+if(NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
 	target_include_directories(
 		${target_project}
 		PRIVATE

@@ -42,7 +42,7 @@ function Resolve-Files {
                 if (!$env:RebuildInvoke) {
                     Write-Host "`t<$a_parent/$directory>"
                     foreach ($file in $_generated) {
-                        Write-Host "`t`t<$file>"
+                        Write-Host "$file"
                     }
                 }
             }
