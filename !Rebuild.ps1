@@ -331,6 +331,15 @@ foreach ($subfolder in $AcceptedSubfolder) {
 			}
 	
 			foreach ($dependency in $Dependencies) {
+				if ($dependency.GetType().Name -eq 'PSCustomObject') {
+					$features = '['
+					foreach ($feature in $dependency.'features') {
+						$features += $feature + ','
+					}
+					$features = $features -replace '.$', ']'
+					$dependency = $dependency.'name' + $features
+				}
+
 				if (!$Installed.Contains($dependency)) {
 					Write-Host "`t`t! [Building] $dependency" -ForegroundColor Yellow -NoNewline
 				}
@@ -348,10 +357,9 @@ foreach ($subfolder in $AcceptedSubfolder) {
 					}
 	
 					$Libraries = $PackageInfo[3].Substring(35).Substring(0, ($PackageInfo[3].Length - 36)) -split '\s+'
-					# full-module-wild
+					# full-module
 					$Linked = $Libraries | Where-Object {$TargetLibraries -contains $_}
 					$Linked += $TargetLibraries -like ($PackageName + '::*')
-					$Linked += $TargetLibraries -contains $PackageName
 	
 					if (!$Linked.Count) {
 						$CMakeLists.Add((Normalize "link_external($TargetName $($Libraries[0]))")) | Out-Null

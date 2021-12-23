@@ -62,11 +62,23 @@ if ($Description) {
     $Json.'description' = $Description
 }
 if ($AddDependencies) {
-    $Json.'dependencies' += $AddDependencies
-    $Json.'dependencies' = $Json.'dependencies' | Select-Object -Unique | Sort-Object
+    Write-Host "`tAdditional vcpkg dependency enabled for this project" -ForegroundColor Yellow
+    foreach ($dependency in $AddDependencies) {
+        if ($dependency.Contains('[')) { # vcpkg-features
+            $Json.'dependencies' += [PSCustomObject]@{
+                'name' = $dependency.Substring(0, $dependency.IndexOf('['))
+                'features' = $dependency.Substring($dependency.IndexOf('[') + 1).Replace(']', '').Split(',').Trim()
+            }
+        } else {
+            $Json.'dependencies' += $dependency
+            $Pakcages += $dependency
+        }
+
+        $Json.'dependencies' = $Json.'dependencies' | Select-Object -Unique | Sort-Object
+    }
 }
 $Json.'features'.'mo2-install'.'description' = $Destination
-$Json = $Json | ConvertTo-Json
+$Json = $Json | ConvertTo-Json -Depth 9
 [IO.File]::WriteAllText("$Path/$Name/vcpkg.json", $Json)
 
 # CMakeLists
