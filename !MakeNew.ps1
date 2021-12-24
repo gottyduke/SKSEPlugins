@@ -29,7 +29,7 @@ $Json = @'
 
 # checks
 if (Test-Path "$Path/$Name" -PathType Container) {
-    Write-Host "`tFolder with same name exists. Aborting." -ForegroundColor Red
+    Write-Host "`tFolder with same name exists. Aborting" -ForegroundColor Red
     Exit
 }
 
@@ -37,7 +37,7 @@ New-Item -Type dir $Path -Force | Out-Null
 
 # update
 if (Test-Path "$env:SKSETemplatePath/CMakeLists.txt" -PathType Leaf) {
-    Write-Host "`tFound Template project!" -ForegroundColor Green
+    Write-Host "`tFound SKSETemplate project" -ForegroundColor Green
 } else {
     Write-Host "`t! Missing Template project! Downloading..." -ForegroundColor Red -NoNewline
     Remove-Item "$PSScriptRoot/Plugins/Template" -Recurse -Force -Confirm:$false -ErrorAction Ignore
@@ -50,7 +50,7 @@ if (Test-Path "$env:SKSETemplatePath/CMakeLists.txt" -PathType Leaf) {
 Copy-Item "$env:SKSETemplatePath/cmake" "$Path/$Name/cmake" -Recurse -Force
 Copy-Item "$env:SKSETemplatePath/src" "$Path/$Name/src" -Recurse -Force
 Copy-Item "$env:SKSETemplatePath/CMakeLists.txt" "$Path/$Name/CMakeLists.txt" -Force
-Copy-Item "$env:SKSETemplatePath/.gitignore" "$Path/$Name/.gitignore" -Force
+Copy-Item "$env:SKSETemplatePath/.gitattributes" "$Path/$Name/.gitattributes" -Force
 
 # Author name
 $main = [IO.File]::ReadAllText("$Path/$Name/src/main.cpp") -replace 'PluginAuthorName', $env:SKSEPluginAuthor
@@ -62,7 +62,7 @@ if ($Description) {
     $Json.'description' = $Description
 }
 if ($AddDependencies) {
-    Write-Host "`tAdditional vcpkg dependency enabled for this project" -ForegroundColor Yellow
+    Write-Host "`tAdditional vcpkg dependency enabled" -ForegroundColor Yellow
     foreach ($dependency in $AddDependencies) {
         if ($dependency.Contains('[')) { # vcpkg-features
             $Json.'dependencies' += [PSCustomObject]@{
@@ -85,5 +85,10 @@ $Json = $Json | ConvertTo-Json -Depth 9
 $CMake = [IO.File]::ReadAllLines("$Path/$Name/CMakeLists.txt") -replace 'Template', $Name
 [IO.File]::WriteAllLines("$Path/$Name/CMakeLists.txt", $CMake)
 
-Write-Host "`tNew project <$Name> generated." -ForegroundColor Green
+Push-Location $Path/$Name
+& git init | Out-Null
+& git add --all | Out-Null
+& git commit -m 'Init' | Out-Null
+Pop-Location
 
+Write-Host "`tGenerated new project <$Name>" -ForegroundColor Green

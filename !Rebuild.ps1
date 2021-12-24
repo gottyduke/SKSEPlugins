@@ -6,12 +6,13 @@ param(
 	[ValidateSet('AE', 'SE')][string]$Mode1,
 	[Alias('C', 'Custom')][switch]$CustomCLib,
 	[switch]$WhatIf,
-	[string[]]$EnableDebugger
+	[Alias('DBG')][string[]]$EnableDebugger,
+	[Alias('D')][string[]]$ExtraCMakeArgument
 )
 
 $ErrorActionPreference = 'Stop'
 
-$env:DKScriptVersion = '11222'
+$env:DKScriptVersion = '20110'
 $env:RebuildInvoke = $true
 
 Write-Host "`tDKScriptVersion $env:DKScriptVersion`t$Mode0`t$Mode1`n"
@@ -60,9 +61,9 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			Set-ExecutionPolicy RemoteSigned -Scope LocalMachine
 		}
 	}
-
-	Add-Type -AssemblyName Microsoft.VisualBasic | Out-Null
-	Add-Type -AssemblyName System.Windows.Forms | Out-Null
+	
+	Add-Type -AssemblyName Microsoft.VisualBasic
+    Add-Type -AssemblyName System.Windows.Forms
 
 	Write-Host "`tBOOTSTRAP starting, please wait..." -ForegroundColor Red -NoNewline
 	foreach ($env in @('CommonLibSSEPath', 'CustomCommonLibSSEPath', 'DKUtilPath', 'SkyrimSEPath', 'SkyrimAEPath', 'MO2SkyrimSEPath', 'MO2SkyrimAEPath', 'SKSETemplatePath', 'SKSEPluginAuthor')) {
@@ -110,7 +111,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		
 		process {
 			Write-Host "`n`t! Missing $GameName" -ForegroundColor Red -NoNewline
-			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Add build support for $($GameName)?`n`nMake sure to select correct version of game if proceeding.", 36, 'Game Build Support')		
+			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Add build support for $($GameName)?`n`nMake sure to select correct version of game if proceeding.", 'YesNo,MsgBoxSetForeground,Question', 'Game Build Support')		
 			while ($Result -eq 6) {
 				$SkyrimFile = New-Object System.Windows.Forms.OpenFileDialog -Property @{
 					Title = "Select $($GameName) Executable"
@@ -126,12 +127,12 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 					Write-Host "`r`t`t- $EnvName has been set to [$CurrentEnv]               "
 					break
 				} else {
-					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Unable to locate $($GameName), try again?", 52, 'Game Build Support')		
+					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Unable to locate $($GameName), try again?", 'YesNo,MsgBoxSetForeground,Exclaimation', 'Game Build Support')		
 				}
 			}
 
 			$MO2EnvName = 'MO2' + $EnvName
-			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable MO2 support for $($GameName)?`n`nMO2 Support: Allows plugin to be directly copied to MO2 directory for faster debugging.", 36, 'MO2 Support')
+			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable MO2 support for $($GameName)?`n`nMO2 Support: Allows plugin to be directly copied to MO2 directory for faster debugging.", 'YesNo,MsgBoxSetForeground,Question', 'MO2 Support')
 			while ($Result -eq 6) {
 				$MO2Dir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
 					Description = "Select MO2 directory for $($GameName), containing /mods, /profiles, and /override folders."
@@ -146,7 +147,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 					Write-Host "`r`t* Enabled MO2 support for $GameName               " -ForegroundColor Green
 					break
 				} else {
-					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Not a valid MO2 path, try again?`n`nMO2 directory contains /mods, /profiles, and /override folders", 52, 'MO2 Support')
+					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Not a valid MO2 path, try again?`n`nMO2 directory contains /mods, /profiles, and /override folders", 'YesNo,MsgBoxSetForeground,Exclaimation', 'MO2 Support')
 				}
 			}
 		}
@@ -159,11 +160,14 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 		Write-Host "`n`t* Located local VCPKG" -ForegroundColor Green
 	} else {
 		Initialize-Repo 'VCPKG_ROOT' 'VCPKG' 'vcpkg.exe' 'vcpkg' 'https://github.com/microsoft/vcpkg'
+
+		& $PSScriptRoot/vcpkg/bootstrap-vcpkg.bat | Out-Null
+		& $PSScriptRoot/vcpkg/vcpkg.exe integrate install | Out-Null	
 	}
 
 	# CommonLibSSEPath
 	Initialize-Repo 'CommonLibSSEPath' 'CommonLib' 'CMakeLists.txt' 'Library/CommonLibSSE' 'https://github.com/Ryan-rsm-McKenzie/CommonLibSSE'
-	$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Enable custom CLib support?', 36, 'Custom CLib support') 
+	$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable custom CLib support?`n`nThis is for people who maintain their own modification of CommonLibSSE", 'YesNo,MsgBoxSetForeground,Question', 'Custom CLib support') 
 	while ($Result -eq 6) {
 		$CustomCLibDir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
 			Description = 'Select custom CommonLib directory, containing CMakeLists.txt'
@@ -178,7 +182,7 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 			Write-Host "`t`t# To use custom CommonLib in build, append switch parameter '-C', '-Custom', or '-CustomCLib' to the !Rebuild command."
 			break
 		} else {
-			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Unable to locate valid CMakeLists.txt, try again?', 52, 'Custom CLib support')		
+			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Unable to locate valid CMakeLists.txt, try again?', 'YesNo,MsgBoxSetForeground,Exclaimation', 'Custom CLib support')		
 		}
 	}
 
@@ -204,10 +208,6 @@ if ($Mode0 -eq 'BOOTSTRAP') {
 	Write-Host "`n`t>>> Bootstrapping finishing up... <<<" -ForegroundColor Green
 	Get-Job | Wait-Job | Out-Null
 	Get-Job | Remove-Job | Out-Null
-
-	$env:VCPKG_ROOT = [System.Environment]::GetEnvironmentVariable('VCPKG_ROOT', [System.EnvironmentVariableTarget]::Machine)
-	& $env:VCPKG_ROOT\bootstrap-vcpkg.bat | Out-Null
-	& $env:VCPKG_ROOT\vcpkg.exe integrate install | Out-Null
 
 	Write-Host "`n`tRestart current command line interface to complete BOOTSTRAP."
 	Exit
@@ -255,17 +255,17 @@ function Show-Concerns {
 		return
 	}
 
-	Write-Host "`n`tFollowing concerns regarding the vcpkg dependencies: "
+	Write-Host "`n`tConcerns regarding the vcpkg dependencies:`n"
 	foreach ($concern in $Concerns) {
-		Write-Host "`n`t $concern"
+		Write-Host "`t $concern `n"
 	}
 
-	Write-Host "`tThese concerns have been *resolved* by !Rebuild`n`tHowever, it is suggested to modify the target CMakeLists.txt to address these concerns" -ForegroundColor Yellow
+	Write-Host "`tThese dependencies have been *resolved* by !Rebuild`n`tHowever, it is suggested to modify the target CMakeLists.txt to address these concerns" -ForegroundColor Yellow
 }
 
 
 # @@CLib
-$CMakeLists = [System.Collections.ArrayList]::new(128)
+$CMakeLists = [System.Collections.ArrayList]::new(256)
 $CLibType = $null
 $CLibPath = $null
 if ($CustomCLib -and !(Test-Path "$env:CustomCommonLibSSEPath/CMakeLists.txt" -PathType Leaf)) {
@@ -273,35 +273,40 @@ if ($CustomCLib -and !(Test-Path "$env:CustomCommonLibSSEPath/CMakeLists.txt" -P
 	Write-Host "`t! CustomCLib invoked but target path does not contain valid CMakeLists!`n`t`t# Path: $($env:CustomCommonLibSSEPath)`n`tFallback to default CLib..." -ForegroundColor Red
 }
 if ($CustomCLib) {
-	$CLibType = 'Custom'
 	$CLibPath = $env:CustomCommonLibSSEPath
+	Copy-Item "$PSScriptRoot/cmake/CLibCustomCMakeLists.txt.in" "$env:CustomCommonLibSSEPath/CMakeLists.txt" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
 } elseif (Test-Path "$env:CommonLibSSEPath/CMakeLists.txt" -PathType Leaf) {
-	Push-Location $env:CommonLibSSEPath
-	if ($ANNIVERSARY_EDITION) {
-		& git checkout -f master -q
-		$CLibType = 'Latest'
-	} else {
-		& git checkout -f 575f84a -q
-		$CLibType = 'Legacy'
-	}
-	Pop-Location
 	$CLibPath = $env:CommonLibSSEPath
 } else {
 	Write-Host "`tNone of the CLib paths is valid!`n`tOR`n`tIncorrect BOOTSTRAP" -ForegroundColor Red
 	Exit
 }
+
+Push-Location $env:CommonLibSSEPath
+if ($ANNIVERSARY_EDITION) {
+	& git checkout -f master -q
+	& git pull -f -q
+	$CLibType = 'Latest'
+} else {
+	& git checkout -f 575f84a -q
+	$CLibType = 'Legacy'
+}
+Pop-Location
+
+if ($CustomCLib) {
+	$CLibType = 'Custom'
+}
 $CMakeLists.Add("`nset(`ENV{CommonLibSSEPath} `"$(Normalize $CLibPath)`")`n") | Out-Null
 $CMakeLists.Add((Add-Subdirectory "$($CLibType)CommonLib" '$ENV{CommonLibSSEPath} "CLib"')) | Out-Null
-Write-Host "`t===> Rebasing [$CLibType] CLib <===" -ForegroundColor DarkYellow
-Copy-Item "$PSScriptRoot/cmake/CLibCustomCMakeLists.txt.in" "$CLibPath/CMakeLists.txt" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
+Write-Host "`t===> Rebasing [$CLibType] CLib <===`n" -ForegroundColor DarkYellow
+Copy-Item "$PSScriptRoot/cmake/CLibCustomCMakeLists.txt.in" "$env:CommonLibSSEPath/CMakeLists.txt" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
 
 
 # @@CMake Targets & Dependencies
-# Enforce external find_package & target_link_library
+# Enforce external find_package & target_link_libraries
 # Concern if not present in the target CMakeLists
 $AcceptedSubfolder = @('Library', 'Plugins')
 $ExcludedSubfolder = @('Template')
-$Installed = @()
 Write-Host "`tBuilding CMake targets & dependencies...`n`t`t= [$Triplet]"
 if (!(Test-Path "$env:VCPKG_ROOT/vcpkg.exe" -PathType Leaf)) {
 	Write-Host "`tInvalid VCPKG_ROOT path!`n`tOR`n`tIncorrect BOOTSTRAP" -ForegroundColor Red
@@ -325,11 +330,12 @@ foreach ($subfolder in $AcceptedSubfolder) {
 				$TargetName += 'Debugger'
 			}
 	
-			$CMakeLists.Add((Add-Subdirectory $TargetPath $TargetPath)) | Out-Null
 			if ($TargetName -ne 'CommonLibSSE') {
+				$CMakeLists.Add((Add-Subdirectory $TargetPath $TargetPath)) | Out-Null
 				$CMakeLists.Add((Normalize "fipch($TargetName $TargetPath)")) | Out-Null
 			}
-	
+
+			Write-Host "`t`t[ $TargetName ]"
 			foreach ($dependency in $Dependencies) {
 				if ($dependency.GetType().Name -eq 'PSCustomObject') {
 					$features = '['
@@ -340,9 +346,7 @@ foreach ($subfolder in $AcceptedSubfolder) {
 					$dependency = $dependency.'name' + $features
 				}
 
-				if (!$Installed.Contains($dependency)) {
-					Write-Host "`t`t! [Building] $dependency" -ForegroundColor Yellow -NoNewline
-				}
+				Write-Host "`t`t! [Building] $dependency" -ForegroundColor Yellow -NoNewline
 				$BuildResult = & $env:VCPKG_ROOT/vcpkg install ${dependency}:$Triplet
 				$PackageInfo = $BuildResult[($BuildResult.Count - 5) .. ($BuildResult.Count - 2)].Trim()
 	
@@ -353,42 +357,38 @@ foreach ($subfolder in $AcceptedSubfolder) {
 					if (!$TargetCMake.Contains($Package[0])) {
 						# assume package is present at this point
 						$CMakeLists.Insert(($CMakeLists.Count - 2), "$($Package[0]) $($Package[1]))") | Out-Null
-						$Concerns += "# $TargetPath : Missing $($Package[0]) $($Package[1])) or similar calls"
+						$Concerns += "# $TargetPath : Missing $($Package[0]) $($Package[1])) or similar call"
 					}
 	
 					$Libraries = $PackageInfo[3].Substring(35).Substring(0, ($PackageInfo[3].Length - 36)) -split '\s+'
-					# full-module
+					# full
 					$Linked = $Libraries | Where-Object {$TargetLibraries -contains $_}
+					# module
 					$Linked += $TargetLibraries -like ($PackageName + '::*')
+					if ($TargetName -eq 'CommonLibSSE') {
+						$Linked += 1 # CLib always linked
+					}
 	
 					if (!$Linked.Count) {
 						$CMakeLists.Add((Normalize "link_external($TargetName $($Libraries[0]))")) | Out-Null
-						$Concerns += "# $TargetPath : Missing one of [$($Libraries -join ' ')] in target_link_libraries call"
+						$Concerns += "# $TargetPath : Missing one of [ $($Libraries -join ' ') ] in target_link_libraries() call"
 						Write-Host "`r`t`t* [LinkedExt] $dependency               " -ForegroundColor Green
-					}
-	
-					if (!$Installed.Contains($dependency)) {
+					} else {
 						Write-Host "`r`t`t* [Installed] $dependency               " -ForegroundColor Green
 					}
 				} elseif ($PackageInfo[0].Contains('header only')) {
 					# skip scanning cmakelists for header only package
 					# enforce include anyway
 					$Header = ($PackageInfo[2] -split '\s+')[0].Substring(10)
-					if (!$Installed.Contains($dependency)) {
-						$CMakeLists.Insert(($CMakeLists.Count - 2), "$($PackageInfo[2])") | Out-Null
-						$CMakeLists.Add((Normalize "include_external($TargetName $Header)")) | Out-Null
-						Write-Host "`r`t`t* [HeaderLib] $dependency               " -ForegroundColor Green
-					}
+					$CMakeLists.Insert(($CMakeLists.Count - 2), "$($PackageInfo[2])") | Out-Null
+					$CMakeLists.Add((Normalize "include_external($TargetName $Header)")) | Out-Null
+					Write-Host "`r`t`t* [HeaderLib] $dependency               " -ForegroundColor Green
 				} else {
-					if (!$Installed.Contains($dependency)) {
-						Write-Host "`r`t`t!![Failed] $dependency               " -ForegroundColor Red
-					}
+					Write-Host "`r`t`t! [Skipped] $dependency               " -ForegroundColor Yellow
 					Write-Host $BuildResult
-					Exit
 				}
-				$Installed += $dependency
+				$CMakeLists.Add((Normalize "include_external($TargetName `"$PSScriptRoot/Build/$TargetPath`")`n")) | Out-Null
 			}
-			$CMakeLists.Add((Normalize "include_external($TargetName `"$PSScriptRoot/Build/$TargetPath`")`n")) | Out-Null
 		}
 	}
 }
@@ -420,13 +420,16 @@ if ($WhatIf) {
 Write-Host "`tCleaning build folder..."
 Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction:Ignore
 
-Write-Host "`tBuilding solution..."
+Write-Host "`tGenerating solution..."
 $Arguments = @(
-	"-DANNIVERSARY_EDITION:BOOL=$([Int32][bool ]$ANNIVERSARY_EDITION)",
+	"-DANNIVERSARY_EDITION:BOOL=$([Int32][bool]$ANNIVERSARY_EDITION)",
 	"-DMTD:BOOL=$([Int32]$MTD)"
 )
 foreach ($enabledDebugger in $EnableDebugger) {
 	$Arguments += "-D$($enabledDebugger.ToUpper())_DEBUG_BUILD:BOOL=1"
+}
+foreach ($extraArg in $ExtraCMakeArgument) {
+	$Arguments += "-D$extraArg"
 }
 $CurProject = $null
 $Failed = $false
