@@ -9,7 +9,7 @@ Scripted template for setting up SKSE64 development environment for the latest C
 + Unified workspace setup. Managing all plugin projects together, build as needed.  
 + Enabled CommonLibSSE in Visual Studio IDE, able to view/modify/recompile CLib code on the fly.
 + Integrated building-testing-deploying with post build control tool.
-+ Supports custom modification of CommonLibSSE-NG.
++ Supports custom maintained fork of CommonLibSSE-NG.
 + Supports plugin configuration files in Visual Studio IDE.
 
 
@@ -92,9 +92,10 @@ To generate a solution targetting special edition(1.5.3+) only and do not compil
 
 A handy post build control tool to help with developing-testing-deploying plugin in a speedy & convenient fashion.
 [![Post-Build-Control.png](https://i.postimg.cc/L8jgsxk6/Post-Build-Control.png)](https://postimg.cc/K1v8qrsd)  
-This tool also manages the `scripts(.psc)`, `shockwave files(.swf)`, `configuration files(.ini|.toml|.json)`.
-
-
+Deploy straight into MO2 with proper file structure, along with all supported files automatically. `scripts(.psc)`, `shockwave files(.swf)`, `configuration files(.ini|.toml|.json)`.  
+[![MO2.png](https://i.postimg.cc/pdhs6bKX/MO2.png)](https://postimg.cc/R3m1WYPj)  
+Refresh MO2(`F5`) and start debugging! Or you can deploy straight into game's data folder, and launch desired SKSE without the struggle of MO2. Once done testing, you may also optionally remove the deployed plugins for game data's integrity.
+[![Log.png](https://i.postimg.cc/KjRjnNdV/Log.png)](https://postimg.cc/WqcsVMp6)  
 <h2 align="center">VCPKG</h2>
 
 `!Rebuild` auto gathers vcpkg dependencies from sub projects and build them if needed. 
@@ -121,7 +122,7 @@ This build setup bundles `DKUtil` header library, full documentation can be foun
 <h2 align="center">Migrating to SKSEPlugins</h2>
 
 Simply use `!MakeNew` script to make new plugin project, then copy every source file except `main.cpp`, `PCH.h`, and `Version.h` (`.h`, `.hpp`, `.hxx`, `.c`, `.cpp`, `.cxx`) into the new project's `src` folder. Then modify new project's `main.cpp` accordingly to adopt your old plugin's changes.  
-After doing so, manually check the `CMakeLists.txt` and `vcpkg.json` to address missing dependency if there's any. You may change the versioning after first successful build or manually changing the above-mentioned two files.  
+After doing so, manually check the `CMakeLists.txt` and `vcpkg.json` to address missing dependency if there's any. You may change the versioning after first successful build or manually changing the two above-mentioned files.  
 
 
 ---
