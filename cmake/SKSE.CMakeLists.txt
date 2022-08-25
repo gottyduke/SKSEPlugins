@@ -1,0 +1,62 @@
+cmake_minimum_required(VERSION 3.21)
+
+# standards & flags
+set(CMAKE_CXX_STANDARD 23)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
+set_property(GLOBAL PROPERTY USE_FOLDERS ON)
+set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE FILEPATH "")
+
+include(GNUInstallDirs)
+
+# info
+project(
+	skse64
+	LANGUAGES CXX
+)
+
+# out-of-source builds only
+if(${PROJECT_SOURCE_DIR} STREQUAL ${PROJECT_BINARY_DIR})
+	message(FATAL_ERROR "In-source builds are not allowed.")
+endif()
+
+# update script for sourcelist.cmake generation
+execute_process(COMMAND powershell -NoProfile -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/!Update.ps1" "DISTRIBUTE")
+
+macro(fipch target_project target_int_dir)
+get_target_property(target_type ${target_project} TYPE)
+if(NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
+	target_compile_options(
+		${target_project}
+		PRIVATE
+			/FI${CMAKE_BINARY_DIR}/${target_int_dir}/CMakeFiles/${target_project}.dir/$<CONFIG>/cmake_pch.hxx
+	)
+endif()
+endmacro()
+
+macro(define_external target_project)
+get_target_property(target_type ${target_project} TYPE)
+if(NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
+	target_compile_definitions(
+		${target_project}
+		PUBLIC
+			WINVER=0x0601	# windows 7, minimum supported version by skyrim special edition
+			_WIN32_WINNT=0x0601
+			"$<$<BOOL:${SKSE_SUPPORT_XBYAK}>:SKSE_SUPPORT_XBYAK=1>"
+			"$<$<BOOL:${ENABLE_SKYRIM_SE}>:ENABLE_SKYRIM_SE=1>"
+			"$<$<BOOL:${ENABLE_SKYRIM_AE}>:ENABLE_SKYRIM_AE=1>"
+			"$<$<BOOL:${ENABLE_SKYRIM_VR}>:ENABLE_SKYRIM_VR=1>"
+			HAS_SKYRIM_MULTI_TARGETING=1
+	)
+endif()
+endmacro()
+
+set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
+set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
+
+add_compile_options(
+	/MP
+)
+
+set(GROUP "CLib")

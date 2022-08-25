@@ -50,11 +50,9 @@ if (Test-Path "$env:SKSETemplatePath/CMakeLists.txt" -PathType Leaf) {
 Copy-Item "$env:SKSETemplatePath/cmake" "$Path/$Name/cmake" -Recurse -Force
 Copy-Item "$env:SKSETemplatePath/src" "$Path/$Name/src" -Recurse -Force
 Copy-Item "$env:SKSETemplatePath/CMakeLists.txt" "$Path/$Name/CMakeLists.txt" -Force
+Copy-Item "$env:SKSETemplatePath/CMakePresets.json" "$Path/$Name/CMakePresets.txt" -Force
 Copy-Item "$env:SKSETemplatePath/.gitattributes" "$Path/$Name/.gitattributes" -Force
 
-# Author name
-$main = [IO.File]::ReadAllText("$Path/$Name/src/main.cpp") -replace 'PluginAuthorName', $env:SKSEPluginAuthor
-[IO.File]::WriteAllLines("$Path/$Name/src/main.cpp", $main)
 
 # generate vcpkg.json
 $Json.'name' = $Name.ToLower()
@@ -92,3 +90,5 @@ Push-Location $Path/$Name
 Pop-Location
 
 Write-Host "`tGenerated new project <$Name>" -ForegroundColor Green
+
+

@@ -1,0 +1,40 @@
+cmake_minimum_required(VERSION 3.18)
+
+# ---- Project ----
+
+project(
+	umbrella
+	LANGUAGES CXX
+)
+
+# ---- Include guards ----
+
+if(PROJECT_SOURCE_DIR STREQUAL PROJECT_BINARY_DIR)
+	message(
+		FATAL_ERROR
+			"In-source builds not allowed. Please make a new directory (called a build directory) and run CMake from there."
+)
+endif()
+
+# ---- Add sub projects ----
+
+macro(add_sub target_project)
+if (NOT TARGET ${target_project})
+	add_subdirectory(${target_project})
+	
+	if(DEFINED GROUP)
+	set_target_properties(
+		${target_project}
+		PROPERTIES
+		FOLDER
+		${GROUP}
+	)
+	endif()
+endif()
+endmacro()
+
+add_sub(f4se)
+add_sub(f4se_common)
+add_sub(f4se_loader)
+add_sub(f4se_loader_common)
+add_sub(f4se_steam_loader)
