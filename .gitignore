@@ -6,3 +6,4 @@ RemoveSig.ps1
 PluginTutorialCN/
 Plugins/
 Library/
+vcpkg.json

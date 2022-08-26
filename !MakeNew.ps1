@@ -50,8 +50,9 @@ if (Test-Path "$env:SKSETemplatePath/CMakeLists.txt" -PathType Leaf) {
 Copy-Item "$env:SKSETemplatePath/cmake" "$Path/$Name/cmake" -Recurse -Force
 Copy-Item "$env:SKSETemplatePath/src" "$Path/$Name/src" -Recurse -Force
 Copy-Item "$env:SKSETemplatePath/CMakeLists.txt" "$Path/$Name/CMakeLists.txt" -Force
-Copy-Item "$env:SKSETemplatePath/CMakePresets.json" "$Path/$Name/CMakePresets.txt" -Force
+Copy-Item "$env:SKSETemplatePath/CMakePresets.json" "$Path/$Name/CMakePresets.json" -Force
 Copy-Item "$env:SKSETemplatePath/.gitattributes" "$Path/$Name/.gitattributes" -Force
+Copy-Item "$env:SKSETemplatePath/.clang-format" "$Path/$Name/.clang-format" -Force
 
 
 # generate vcpkg.json

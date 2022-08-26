@@ -292,27 +292,28 @@ Copy-Item "$PSScriptRoot/cmake/SKSE.CMakeLists.CLib.txt" "$env:CommonLibSSEPath/
 $AcceptedSubfolder = @('Library', 'Plugins')
 $ExcludedSubfolder = 'Template|CommonLib'
 Write-Host "`tFinding CMake targets..."
-$ProjectVCPKG = [IO.File]::ReadAllText("$PSScriptRoot/cmake/vcpkg.json") | ConvertFrom-Json
+$ProjectVCPKG = [IO.File]::ReadAllText("$PSScriptRoot/cmake/vcpkg.json.in") | ConvertFrom-Json
 foreach ($subfolder in $AcceptedSubfolder) {
 	$CMakeLists.Add("`nset(GROUP `"$subfolder`")`n") | Out-Null
 	Get-ChildItem "$PSScriptRoot/$subfolder" -Directory | Where-Object {
-		($_.Name -notmatch $ExcludedSubfolder) -and
-		(Test-Path "$_/CMakeLists.txt" -PathType Leaf)
+		$_.Name -notmatch $ExcludedSubfolder
 	} | Resolve-Path -Relative | ForEach-Object {
-		$TargetPath = $_.Substring(2)
-		$TargetName = $_.Substring(10)
-		Write-Host "`t`t[ $TargetName ]"
-
-		$vcpkg = [IO.File]::ReadAllText("$_/vcpkg.json") | ConvertFrom-Json
-		$ProjectVCPKG.dependencies += $vcpkg.'dependencies'
-
-		if ($EnableDebugger -and $EnableDebugger.Contains($TargetName)) {
-			$TargetName += 'Debugger'
+		if (Test-Path "$_/CMakeLists.txt" -PathType Leaf) {
+			$TargetPath = $_.Substring(2)
+			$TargetName = $_.Substring(10)
+			Write-Host "`t`t[ $TargetName ]"
+	
+			$vcpkg = [IO.File]::ReadAllText("$_/vcpkg.json") | ConvertFrom-Json
+			$ProjectVCPKG.dependencies += $vcpkg.'dependencies'
+	
+			if ($EnableDebugger -and $EnableDebugger.Contains($TargetName)) {
+				$TargetName += 'Debugger'
+			}
+	
+			$CMakeLists.Add((Add-Subdirectory $TargetPath $TargetPath)) | Out-Null
+			$CMakeLists.Add((Normalize "fipch($TargetName $TargetPath)")) | Out-Null
+			$CMakeLists.Add((Normalize "define_external($TargetName)")) | Out-Null
 		}
-
-		$CMakeLists.Add((Add-Subdirectory $TargetPath $TargetPath)) | Out-Null
-		$CMakeLists.Add((Normalize "fipch($TargetName $TargetPath)")) | Out-Null
-		$CMakeLists.Add((Normalize "define_external($TargetName)")) | Out-Null
 	}
 }
 $Deps = @()
@@ -370,7 +371,7 @@ Write-Host "`tListing vcpkg dependencies: "
 $Deps | ForEach-Object {
 	"`t`t[ $_ ]"
 }
-Write-Host "`tGenerating solution..."
+Write-Host "`tBuilding dependencies & generating solution..."
 $CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot --preset=$($Runtime.ToUpper()) $Arguments | ForEach-Object {
 	if ($_.StartsWith('-- Rebuilding ') -and !($_.EndsWith(' - Complete'))) {
 		$CurProject = $_.Substring(14)
@@ -395,12 +396,11 @@ else {
 
 	# @@Compile
 	if (!$NoPrebuild) {
-		Write-Host "`n`tCompiling CommonLib in the background." -NoNewline
-		Write-Host " Do not close the compilers windows!" -ForegroundColor Red
+		Write-Host "`n`tCompiling CommonLib in the background.`n`t# To disable this behavior, append switch `-N` or `-NoBuild` to the !Rebuild command."
+		Write-Host "`n`tDo not close the compiler windows! Wait for background compilers to finish." -ForegroundColor Red
 		Start-Process cmd.exe -ArgumentList "/k cmake.exe --build Build/CLib --config Debug && exit"
 		Start-Process cmd.exe -ArgumentList "/k cmake.exe --build Build/CLib --config Release && exit"
-		Write-Host "`tPlease wait for background compilers to finish." -NoNewline
-		Write-Host " !Rebuild will now exit." -ForegroundColor Green
+		Write-Host "`n`t!Rebuild will now exit." -ForegroundColor Green
 	}
 }
 
