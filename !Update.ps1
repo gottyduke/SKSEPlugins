@@ -34,7 +34,7 @@ function Resolve-Files {
 
                 Get-ChildItem "$a_parent/$directory" -Recurse -File -ErrorAction SilentlyContinue | Where-Object {
                     ($_.Extension -in $SourceExt) -and 
-                    ($_.Name -ne 'Version.h')
+                    ($_.Name -notmatch 'Plugin.h|Version.h')
                 } | Resolve-Path -Relative | ForEach-Object {
                     if (!$env:RebuildInvoke) {
                         Write-Host "`t`t<$_>"
@@ -66,7 +66,6 @@ Write-Host "`n`t<$Folder> [$Mode]"
 
 # @@COPY
 if ($Mode -eq 'COPY') {
-
     # process newly added files
     $BuildFolder = Get-ChildItem (Get-Item $Path).Parent.Parent.FullName "$Project.sln" -Depth 2 -File -Exclude ('*CMakeFiles*', '*CLib*')
     $NewFiles = Get-ChildItem $BuildFolder.DirectoryName -File | Where-Object {$_.Extension -in $SourceExt}
