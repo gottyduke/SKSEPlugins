@@ -3,6 +3,7 @@
 # args
 param(
 	[switch]$Bootstrap,
+	[switch]$Update,
 	[switch]$WhatIf,
 	[ValidateSet('AE', 'SE', 'VR', 'ALL', 'PRE-AE', 'FLATRIM')][string]$Runtime = 'ALL',
 	[Alias('C', 'Custom')][switch]$CustomCLib,
@@ -13,7 +14,7 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$env:DKScriptVersion = '22825'
+$env:DKScriptVersion = '22908'
 $env:RebuildInvoke = $true
 $env:ScriptCulture = (Get-Culture).Name -eq 'zh-CN'
 
@@ -170,6 +171,10 @@ if ($Bootstrap) {
 		}
 	}
 	
+	if ($Update.IsPresent) {
+		Exit
+	}
+
 	Add-Type -AssemblyName Microsoft.VisualBasic
 	Add-Type -AssemblyName System.Windows.Forms
 

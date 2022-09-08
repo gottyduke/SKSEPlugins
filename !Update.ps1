@@ -150,33 +150,30 @@ if ($Mode -eq 'COPY') {
     
     $BtnCopyMO2 = New-Object System.Windows.Forms.Button -Property @{
         ClientSize = '70, 50'
-        Location = New-Object System.Drawing.Point(260, 19)
         Text = 'Copy to MO2'
+        Location = New-Object System.Drawing.Point(260, 19)
+        BackColor = 'Cyan'
         Add_Click = {
-            $BtnCopyMO2.Enabled = $false
             foreach ($runtime in @("$($env:MO2SkyrimAEPath)/mods", "$($env:MO2SkyrimSEPath)/mods", "$($env:MO2SkyrimVRPath)/mods")) {
                 if (Test-Path $runtime -PathType Container) {
                     Copy-Mod "$runtime/$Install"
                 }
             }
             $Message.Text += "`r`n- Copied to MO2."
-            $BtnCopyMO2.Enabled = $true
         }
     }
     
     $BtnCopyData = New-Object System.Windows.Forms.Button -Property @{
         ClientSize = '70, 50'
-        Location = New-Object System.Drawing.Point(260, 74)
         Text = 'Copy to Data'
+        Location = New-Object System.Drawing.Point(260, 74)
         Add_Click = {
-            $BtnCopyData.Enabled = $false
             foreach ($runtime in @("$($env:SkyrimAEPath)/data", "$($env:SkyrimSEPath)/data", "$($env:SkyrimVRPath)/data")) {
                 if (Test-Path $runtime -PathType Container) {
                     Copy-Mod "$runtime"
                 }
             }
             $Message.Text += "`r`n- Copied to game data."
-            $BtnCopyData.Enabled = $true
         }
     }
     
@@ -185,14 +182,12 @@ if ($Mode -eq 'COPY') {
         Text = 'Remove in Data'
         Location = New-Object System.Drawing.Point(260, 129)
         Add_Click = {
-            $BtnRemoveData.Enabled = $false
             foreach ($runtime in @("$($env:SkyrimAEPath)/data", "$($env:SkyrimSEPath)/data", "$($env:SkyrimVRPath)/data")) {
                 if (Test-Path "$runtime/SKSE/Plugins/$Project.dll" -PathType Leaf) {
                     Remove-Item "$runtime/SKSE/Plugins/$Project.dll" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
                 }
             }
             $Message.Text += "`r`n- Removed from game data."
-            $BtnRemoveData.Enabled = $true
         }
     }
     
@@ -200,6 +195,7 @@ if ($Mode -eq 'COPY') {
         ClientSize = '70, 50'
         Text = 'Show in Explorer'
         Location = New-Object System.Drawing.Point(260, 185)
+        BackColor = 'Yellow'
         Add_Click = {
             Invoke-Item $Path
         }
@@ -210,14 +206,11 @@ if ($Mode -eq 'COPY') {
         Text = 'SKSE (AE)'
         Location = New-Object System.Drawing.Point(20, 185)
         Add_Click = {
-            $BtnLaunchSKSEAE.Enabled = $false
-
             Push-Location $env:SkyrimAEPath
             Start-Process ./SKSE64_loader.exe
             Pop-Location
 
             $Message.Text += "`r`n- SKSE (AE) Launched."
-            $BtnLaunchSKSEAE.Enabled = $true
         }
     }
     if (!(Test-Path "$env:SkyrimAEPath/skse64_loader.exe" -PathType Leaf)) {
@@ -229,14 +222,11 @@ if ($Mode -eq 'COPY') {
         Text = 'SKSE (SE)'
         Location = New-Object System.Drawing.Point(100, 185)
         Add_Click = {
-            $BtnLaunchSKSESE.Enabled = $false
-
             Push-Location $env:SkyrimSEPath
             Start-Process ./SKSE64_loader.exe
             Pop-Location
 
             $Message.Text += "`r`n- SKSE (SE) Launched."
-            $BtnLaunchSKSESE.Enabled = $true
         }
     }
     if (!(Test-Path "$env:SkyrimSEPath/skse64_loader.exe" -PathType Leaf)) {
@@ -248,14 +238,11 @@ if ($Mode -eq 'COPY') {
         Text = 'SKSE (VR)'
         Location = New-Object System.Drawing.Point(180, 185)
         Add_Click = {
-            $BtnLaunchSKSEVR.Enabled = $false
-
             Push-Location $env:SkyrimVRPath
             Start-Process ./SKSE64_loader.exe
             Pop-Location
 
             $Message.Text += "`r`n- SKSE (VR) Launched."
-            $BtnLaunchSKSEVR.Enabled = $true
         }
     }
     if (!(Test-Path "$env:SkyrimVRPath/skse64_loader.exe" -PathType Leaf)) {
@@ -267,14 +254,12 @@ if ($Mode -eq 'COPY') {
         Text = 'Build Papyrus'
         Location = New-Object System.Drawing.Point(20, 240)
         Add_Click = {
-            $BtnBuildPapyrus.Enabled = $false
             $BtnBuildPapyrus.Text = 'Compiling...'
             
             $Invocation = "`"$($env:SkyrimSEPath)/Papyrus Compiler/PapyrusCompiler.exe`" `"$PSScriptRoot/Scripts/Source`" -f=`"$env:SkyrimSEPath/Papyrus Compiler/TESV_Papyrus_Flags.flg`" -i=`"$env:SkyrimSEPath/Data/Scripts/Source;$PSScriptRoot/Scripts;$PSScriptRoot/Scripts/Source`" -o=`"$PSScriptRoot/Scripts`" -a -op -enablecache -t=`"4`""
             Start-Process cmd.exe -ArgumentList "/k $Invocation && pause && exit"
             
             $BtnBuildPapyrus.Text = 'Build Papyrus'
-            $BtnBuildPapyrus.Enabled = $true
         }
     }
     
@@ -283,7 +268,6 @@ if ($Mode -eq 'COPY') {
         Text = 'Version'
         Location = New-Object System.Drawing.Point(100, 240)
         Add_Click = {
-            $BtnChangeVersion.Enabled = $false
             $NewVersion = $null
             while ($OldVersion -and !$NewVersion) {
                 $NewVersion = [Microsoft.VisualBasic.Interaction]::InputBox("Input the new versioning for $Project", 'Versioning', $OldVersion)
@@ -298,8 +282,6 @@ if ($Mode -eq 'COPY') {
 
             $Message.Text += "`r`n- Version changed $OldVersion -> $NewVersion"
             $OldVersion = $NewVersion
-
-            $BtnChangeVersion.Enabled = $true
         }
     }
     
@@ -308,7 +290,6 @@ if ($Mode -eq 'COPY') {
         Text = 'Publish Mod'
         Location = New-Object System.Drawing.Point(180, 240)
         Add_Click = {
-            $BtnPublish.Enabled = $false
             $BtnPublish.Text = 'Zipping...'
 
             Copy-Mod "$PSScriptRoot/Tmp/Data"
@@ -318,7 +299,6 @@ if ($Mode -eq 'COPY') {
 
             $Message.Text += "`r`n- Mod files zipped & ready to go."
             $BtnPublish.Text = 'Publish Mod'
-            $BtnPublish.Enabled = $true
         }
     }
     
