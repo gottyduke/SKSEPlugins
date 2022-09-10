@@ -101,7 +101,7 @@ if ($Bootstrap) {
 					break
 				}
 				else {
-					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Unable to locate $($GameName), try again?", 'YesNo,MsgBoxSetForeground,Exclaimation', 'Game Build Support')		
+					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Unable to locate $($GameName), try again?", 'YesNo,MsgBoxSetForeground,Exclamation', 'Game Build Support')		
 				}
 			}
 
@@ -122,7 +122,7 @@ if ($Bootstrap) {
 					break
 				}
 				else {
-					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Not a valid MO2 path, try again?`n`nMO2 directory contains /mods, /profiles, and /override folders", 'YesNo,MsgBoxSetForeground,Exclaimation', 'MO2 Support')
+					$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Not a valid MO2 path, try again?`n`nMO2 directory contains /mods, /profiles, and /override folders", 'YesNo,MsgBoxSetForeground,Exclamation', 'MO2 Support')
 				}
 			}
 		}
@@ -217,7 +217,7 @@ if ($Bootstrap) {
 			break
 		}
 		else {
-			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Unable to locate valid CMakeLists.txt, try again?', 'YesNo,MsgBoxSetForeground,Exclaimation', 'Custom CLib support')		
+			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox('Unable to locate valid CMakeLists.txt, try again?', 'YesNo,MsgBoxSetForeground,Exclamation', 'Custom CLib support')		
 		}
 	}
 
