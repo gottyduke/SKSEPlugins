@@ -1,9 +1,11 @@
 vcpkg/
 Build/
 .vs/
+.vscode/
 CMakeLists.txt
 RemoveSig.ps1
 PluginTutorialCN/
 Plugins/
 Library/
 vcpkg.json
+*.cmd

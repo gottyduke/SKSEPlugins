@@ -13,8 +13,9 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+$PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
 
-$env:DKScriptVersion = '22908'
+$env:DKScriptVersion = '22914'
 $env:RebuildInvoke = $true
 $env:ScriptCulture = (Get-Culture).Name -eq 'zh-CN'
 
@@ -336,6 +337,7 @@ $Deps = $Deps | Sort-Object -Unique
 $Header = @((Get-Date -UFormat '# !Rebuild generated @ %R %B %d'), "# DKScriptVersion $env:DKScriptVersion")
 $Boiler = [IO.File]::ReadAllLines("$PSScriptRoot/cmake/SKSE.CMakeLists.txt")
 $CMakeLists = $Header + $Boiler + $CMakeLists
+$CMakeLists = $CMakeLists -replace 'skse64', "SKSE64_$($Runtime.ToUpper())"
 [IO.File]::WriteAllLines("$PSScriptRoot/CMakeLists.txt", $CMakeLists)
 $ProjectVCPKG = $ProjectVCPKG | ConvertTo-Json -Depth 9
 [IO.File]::WriteAllText("$PSScriptRoot/vcpkg.json", $ProjectVCPKG)
@@ -395,8 +397,8 @@ if ($CMake[-2] -ne '-- Generating done') {
 	Write-Host "`tFailed generating solution!" -ForegroundColor Red
 }
 else {
-	Write-Host "`tFinished generating solution!`n`tYou may open the solution file and starting coding." -ForegroundColor Green
-	
+	Write-Host "`tFinished generating solution!`n`n`tYou may open the skse64.sln and starting coding." -ForegroundColor Green
+
 	Invoke-Item "$PSScriptRoot/Build"
 
 	# @@Compile
@@ -405,8 +407,42 @@ else {
 		Write-Host "`n`tDo not close the compiler windows! Wait for background compilers to finish." -ForegroundColor Red
 		Start-Process cmd.exe -ArgumentList "/k cmake.exe --build Build/CLib --config Debug && exit"
 		Start-Process cmd.exe -ArgumentList "/k cmake.exe --build Build/CLib --config Release && exit"
-		Write-Host "`n`t!Rebuild will now exit." -ForegroundColor Green
 	}
+	
+	# @@QuickBuild
+	$Invocation = "@echo off`n" + 'powershell -ExecutionPolicy Bypass -Command "& %~dp0/!Rebuild.ps1 '
+	$Invocation += " $($Runtime)"
+	if ($CustomCLib) {
+		$Invocation += " -custom"
+	}
+	if ($NoPrebuild) {
+		$Invocation += " -nobuild"
+	}
+	if ($EnableDebugger) {
+		$Invocation += " -dbg"
+		foreach ($enabledDebugger in $EnableDebugger) {
+			$Invocation += " $($enabledDebugger)"
+		}
+	}
+	if ($ExtraCMakeArgument) {
+		$Invocation += " -d"
+		foreach ($extraArg in $ExtraCMakeArgument) {
+			$Invocation += " $($extraArg)"
+		}
+	}
+
+	$Invocation += '"'
+
+	$Batch = Get-ChildItem "$PSSciptRoot" -File | Where-Object {($_.Extension -eq '.cmd') -and ($_.BaseName.StartsWith('!_LAST_'))} | ForEach-Object {
+		Remove-Item "$_" -Confirm:$false -Force -ErrorAction:SilentlyContinue | Out-Null
+	}
+
+	$Batch = "!_LAST_$($Runtime.ToUpper())$(if ($CustomCLib) {"_CUSTOM"}).cmd"
+
+	[IO.File]::WriteAllText("$PSScriptRoot/$Batch", $Invocation)
+
+	Write-Host "`tTo rebuild with same configuration, use the generated batch file.`n`t* $Batch *" -ForegroundColor Green
+	Write-Host "`n`t!Rebuild will now exit." -ForegroundColor Green
 }
 
 
