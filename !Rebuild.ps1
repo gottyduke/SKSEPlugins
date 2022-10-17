@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
 
-$env:DKScriptVersion = '22914'
+$env:DKScriptVersion = '22O17'
 $env:RebuildInvoke = $true
 $env:ScriptCulture = (Get-Culture).Name -eq 'zh-CN'
 
@@ -107,13 +107,12 @@ if ($Bootstrap) {
 			}
 
 			$MO2EnvName = 'MO2' + $EnvName
-			while ($Result -eq 6) {			
-				$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable MO2 support for $($GameName)?`n`nMO2 Support: Allows plugin to be directly copied to MO2 directory for faster debugging.", 'YesNo,MsgBoxSetForeground,Question', 'MO2 Support')
-				$MO2Dir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
-					Description         = "Select MO2 directory for $($GameName), containing /mods, /profiles, and /override folders."
-					ShowNewFolderButton = $false
-				}
-
+			$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable MO2 support for $($GameName)?`n`nMO2 Support: Allows plugin to be directly copied to MO2 directory for faster debugging.", 'YesNo,MsgBoxSetForeground,Question', 'MO2 Support')
+			$MO2Dir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{
+				Description         = "Select MO2 directory for $($GameName), containing /mods, /profiles, and /override folders."
+				ShowNewFolderButton = $false
+			}
+			while ($Result -eq 6) {	
 				$MO2Dir.ShowDialog() | Out-Null
 				if (Test-Path "$($MO2Dir.SelectedPath)/mods" -PathType Container) {
 					Write-Host "`tMapping path, please wait..." -NoNewline
@@ -263,7 +262,7 @@ function Add-Subdirectory ($Name, $Path) {
 }
 
 
-function On-Exit {
+function Restore {
 	Copy-Item "$env:CommonLibSSEPath/CMakeLists.txt.disabled" "$env:CommonLibSSEPath/CMakeLists.txt" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
 	Remove-Item "$env:CommonLibSSEPath/CMakeLists.txt.disabled" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
 	Exit
@@ -337,7 +336,7 @@ $Deps = $Deps | Sort-Object -Unique
 $Header = @((Get-Date -UFormat '# !Rebuild generated @ %R %B %d'), "# DKScriptVersion $env:DKScriptVersion")
 $Boiler = [IO.File]::ReadAllLines("$PSScriptRoot/cmake/SKSE.CMakeLists.txt")
 $CMakeLists = $Header + $Boiler + $CMakeLists
-$CMakeLists = $CMakeLists -replace 'skse64', "SKSE64_$($Runtime.ToUpper())"
+$CMakeLists = $CMakeLists -replace '\sskse64', "`tSKSE64_$($Runtime.ToUpper())"
 [IO.File]::WriteAllLines("$PSScriptRoot/CMakeLists.txt", $CMakeLists)
 $ProjectVCPKG = $ProjectVCPKG | ConvertTo-Json -Depth 9
 [IO.File]::WriteAllText("$PSScriptRoot/vcpkg.json", $ProjectVCPKG)
@@ -356,7 +355,6 @@ if ($EnableDebugger.Count) {
 if ($WhatIf) {
 	Write-Host "`tPrebuild complete" -ForegroundColor Green
 	Invoke-Item "$PSScriptRoot/CMakeLists.txt"
-	On-Exit
 }
 
 
@@ -445,6 +443,4 @@ else {
 	Write-Host "`n`t!Rebuild will now exit." -ForegroundColor Green
 }
 
-
-On-Exit
 

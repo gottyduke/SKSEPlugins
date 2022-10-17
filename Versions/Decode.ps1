@@ -1,28 +1,36 @@
 #Requires -Version 5
 
+param(
+    [System.IO.FileInfo]$File
+)
+
 $ErrorActionPreference = 'Stop'
 [IO.Directory]::SetCurrentDirectory($PSScriptRoot)
 
-Add-Type -AssemblyName PresentationCore, PresentationFramework
+if (!$File) {
+    Add-Type -AssemblyName PresentationCore, PresentationFramework
 
-$BinFiles = Get-ChildItem $PSScriptRoot -File -Filter *.bin
-if ($BinFiles.Count -eq 0) {
-    [System.Windows.MessageBox]::Show('未检测到当前目录下的bin文件!', '提示', 'OK', 'Warning') | Out-Null
-    Exit
+    $BinFiles = Get-ChildItem $PSScriptRoot -File -Filter *.bin
+    if ($BinFiles.Count -eq 0) {
+        [System.Windows.MessageBox]::Show('未检测到当前目录下的bin文件!', '提示', 'OK', 'Warning') | Out-Null
+        Exit
+    }
+    
+    for ($index= 0; $index -lt $BinFiles.Count; ++$index) {
+        Write-Host "[$($index)] $($BinFiles[$index].Name)"
+    }
+    
+    $BinIndex = Read-Host '选择要解码的bin文件'
+    if ($BinIndex -gt $BinFiles.Count) {
+        Write-Host '选项不存在!' -ForegroundColor Red
+        Exit
+    }
+
+    $File = $BinFiles[$BinIndex]
 }
 
-for ($index= 0; $index -lt $BinFiles.Count; ++$index) {
-    Write-Host "[$($index)] $($BinFiles[$index].Name)"
-}
-
-$BinIndex = Read-Host '选择要解码的bin文件'
-if ($BinIndex -gt $BinFiles.Count) {
-    Write-Host '选项不存在!' -ForegroundColor Red
-    Exit
-}
-
-$Bin = [System.IO.BinaryReader]::new([System.IO.File]::Open($BinFiles[$BinIndex], [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite))
-$Output = [System.IO.StreamWriter]::new("$($PSScriptRoot)\$($BinFiles[$BinIndex].BaseName).txt")
+$Bin = [System.IO.BinaryReader]::new([System.IO.File]::Open($File, [System.IO.FileMode]::Open, [System.IO.FileAccess]::Read, [System.IO.FileShare]::ReadWrite))
+$Output = [System.IO.StreamWriter]::new("$($PSScriptRoot)\$($File.BaseName).txt")
 $Output.WriteLine("ID`tOffset`n==`t======")
 
 # Version
@@ -30,7 +38,7 @@ try {
     $Head = $Bin.ReadUInt32()
     if ($Head -gt 2) { 
         # Fallout 4 Address Library
-        Write-Host 'bin版本: Fallout4'
+        Write-Host 'bin版本: Fallout4.exe'
 
         $null = $Bin.ReadUInt32()
         for ($pair = 0; $pair -lt $Head; ++$pair) {
@@ -59,7 +67,7 @@ try {
         [Byte]$b2 = 0
         [UInt16]$w1 = 0
         [UInt16]$w2 = 0
-        [UInt32]$d1 = 
+        [UInt32]$d1 = 0
         [UInt32]$d2 = 0
         [UInt64]$q1 = 0
         [UInt64]$q2 = 0

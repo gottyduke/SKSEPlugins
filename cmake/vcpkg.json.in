@@ -6,7 +6,8 @@
   "homepage": "https://github.com/gottyduke/SKSEPlugins",
   "license": "MIT",
   "supports": "windows & x64",
-  "dependencies": [    
+  "dependencies": [
+    "catch2",
     "fast-cpp-csv-parser",
     "fmt",
     "rapidcsv",

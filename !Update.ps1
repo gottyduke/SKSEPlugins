@@ -16,6 +16,23 @@ $SourceExt = @('.c', '.cpp', '.cxx', '.h', '.hpp', '.hxx')
 $ConfigExt = @('.ini', '.json', '.toml')
 $env:ScriptCulture = (Get-Culture).Name -eq 'zh-CN'
 
+
+function L {
+	param (
+		[Parameter(Mandatory)][string]$en,
+		[string]$zh = ''
+	)
+	
+	process {
+		if ($env:ScriptCulture -and $zh) {
+			return $zh
+		}
+		else {
+			return $en
+		}
+	}
+}
+
 function Resolve-Files {
     param (
         [Parameter(ValueFromPipeline)][string]$a_parent = $PSScriptRoot,
@@ -82,47 +99,6 @@ if ($Mode -eq 'COPY') {
     $OldVersion = [regex]::match($ProjectCMake, '(?s)(?:(?<=\sVERSION\s)(.*?)(?=\s+))').Groups[1].Value
 
 
-    function Copy-Mod {
-        param (
-            $Data
-        )
-
-        New-Item -Type Directory "$Data/SKSE/Plugins" -Force | Out-Null
-
-        # binary
-        Copy-Item "$Path/$Project.dll" "$Data/SKSE/Plugins/$Project.dll" -Force
-        $Message.Text += "`r`n- Binary files copied"
-
-        # configs
-        Get-ChildItem $PSScriptRoot | Where-Object {
-            ($_.Extension -in $ConfigExt) -and 
-            ($_.Name -notmatch 'CMake|vcpkg')
-        } | ForEach-Object {
-            Copy-Item $_.FullName "$Data/SKSE/Plugins/$($_.Name)" -Force
-            $Message.Text += "`r`n- Configuration files copied"
-        }
-
-        # shockwave
-        if (Test-Path "$PSScriptRoot/Interface/*.swf" -PathType Leaf) {
-            New-Item -Type Directory "$Data/Interface" -Force | Out-Null
-            Copy-Item "$PSScriptRoot/Interface" "$Data" -Recurse -Force
-            $Message.Text += "`r`n- Shockwave files copied"
-        }
-
-        # papyrus
-        if (Test-Path "$PSScriptRoot/Scripts/*.pex" -PathType Leaf) {
-            New-Item -Type Directory "$Data/Scripts" -Force | Out-Null
-            xcopy.exe "$PSScriptRoot/Scripts" "$Data/Scripts" /C /I /S /E /Y
-            $Message.Text += "`r`n- Papyrus scripts copied"
-        }
-        if (Test-Path "$PSScriptRoot/Scripts/Source/*.psc" -PathType Leaf) {
-            New-Item -Type Directory "$Data/Scripts/Source" -Force | Out-Null
-            xcopy.exe "$PSScriptRoot/Scripts/Source" "$Data/Scripts/Source" /C /I /S /E /Y
-            $Message.Text += "`r`n- Papyrus scripts copied"
-        }
-    }
-
-
 	Add-Type -AssemblyName Microsoft.VisualBasic
     Add-Type -AssemblyName System.Windows.Forms
     Add-Type -AssemblyName System.Drawing
@@ -139,15 +115,63 @@ if ($Mode -eq 'COPY') {
         Font = New-Object System.Drawing.Font('Segoe UI', 10, [System.Drawing.FontStyle]::Regular)
     }
     
-    $Message = New-Object System.Windows.Forms.TextBox -Property @{
+    $Message = New-Object System.Windows.Forms.ListBox -Property @{
         ClientSize = '225, 150'
         Location = New-Object System.Drawing.Point(20, 20)
-        Multiline = $true
-        ReadOnly = $true
-        Text = "- [$Project - $OldVersion] has been built."
-        
     }
     
+    function Log {
+        param (
+            [Parameter(ValueFromPipeline)][string]$a_log
+        )
+
+        process {
+            $Message.Items.Add($a_log)
+            $Message.SelectedIndex = $Message.Items.Count - 1;
+            $Message.SelectedIndex = -1;
+        }
+    }
+    
+    function Copy-Mod {
+        param (
+            $Data
+        )
+
+        New-Item -Type Directory "$Data/SKSE/Plugins" -Force | Out-Null
+
+        # binary
+        Copy-Item "$Path/$Project.dll" "$Data/SKSE/Plugins/$Project.dll" -Force
+        "- Binary files copied" | Log
+
+        # configs
+        Get-ChildItem $PSScriptRoot | Where-Object {
+            ($_.Extension -in $ConfigExt) -and 
+            ($_.Name -notmatch 'CMake|vcpkg')
+        } | ForEach-Object {
+            Copy-Item $_.FullName "$Data/SKSE/Plugins/$($_.Name)" -Force
+            "- Configuration files copied" | Log
+        }
+
+        # shockwave
+        if (Test-Path "$PSScriptRoot/Interface/*.swf" -PathType Leaf) {
+            New-Item -Type Directory "$Data/Interface" -Force | Out-Null
+            Copy-Item "$PSScriptRoot/Interface" "$Data" -Recurse -Force
+            "- Shockwave files copied" | Log
+        }
+
+        # papyrus
+        if (Test-Path "$PSScriptRoot/Scripts/*.pex" -PathType Leaf) {
+            New-Item -Type Directory "$Data/Scripts" -Force | Out-Null
+            xcopy.exe "$PSScriptRoot/Scripts" "$Data/Scripts" /C /I /S /E /Y
+            "- Papyrus scripts copied" | Log
+        }
+        if (Test-Path "$PSScriptRoot/Scripts/Source/*.psc" -PathType Leaf) {
+            New-Item -Type Directory "$Data/Scripts/Source" -Force | Out-Null
+            xcopy.exe "$PSScriptRoot/Scripts/Source" "$Data/Scripts/Source" /C /I /S /E /Y
+            "- Papyrus scripts copied" | Log
+        }
+    }
+
     $BtnCopyMO2 = New-Object System.Windows.Forms.Button -Property @{
         ClientSize = '70, 50'
         Text = 'Copy to MO2'
@@ -159,7 +183,7 @@ if ($Mode -eq 'COPY') {
                     Copy-Mod "$runtime/$Install"
                 }
             }
-            $Message.Text += "`r`n- Copied to MO2."
+            "- Copied to MO2." | Log
         }
     }
     
@@ -173,7 +197,7 @@ if ($Mode -eq 'COPY') {
                     Copy-Mod "$runtime"
                 }
             }
-            $Message.Text += "`r`n- Copied to game data."
+            "- Copied to game data." | Log
         }
     }
     
@@ -187,7 +211,7 @@ if ($Mode -eq 'COPY') {
                     Remove-Item "$runtime/SKSE/Plugins/$Project.dll" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
                 }
             }
-            $Message.Text += "`r`n- Removed from game data."
+            "- Removed from game data." | Log
         }
     }
     
@@ -210,7 +234,7 @@ if ($Mode -eq 'COPY') {
             Start-Process ./SKSE64_loader.exe
             Pop-Location
 
-            $Message.Text += "`r`n- SKSE (AE) Launched."
+            "- SKSE (AE) Launched." | Log
         }
     }
     if (!(Test-Path "$env:SkyrimAEPath/skse64_loader.exe" -PathType Leaf)) {
@@ -226,7 +250,7 @@ if ($Mode -eq 'COPY') {
             Start-Process ./SKSE64_loader.exe
             Pop-Location
 
-            $Message.Text += "`r`n- SKSE (SE) Launched."
+            "- SKSE (SE) Launched." | Log
         }
     }
     if (!(Test-Path "$env:SkyrimSEPath/skse64_loader.exe" -PathType Leaf)) {
@@ -242,7 +266,7 @@ if ($Mode -eq 'COPY') {
             Start-Process ./SKSE64_loader.exe
             Pop-Location
 
-            $Message.Text += "`r`n- SKSE (VR) Launched."
+            "- SKSE (VR) Launched." | Log
         }
     }
     if (!(Test-Path "$env:SkyrimVRPath/skse64_loader.exe" -PathType Leaf)) {
@@ -280,7 +304,7 @@ if ($Mode -eq 'COPY') {
             [IO.File]::WriteAllText("$PSScriptRoot/vcpkg.json", $vcpkg)
 
 
-            $Message.Text += "`r`n- Version changed $OldVersion -> $NewVersion"
+            "- Version changed $OldVersion -> $NewVersion" | Log
             $OldVersion = $NewVersion
         }
     }
@@ -297,7 +321,7 @@ if ($Mode -eq 'COPY') {
             Remove-Item "$PSScriptRoot/Tmp" -Recurse -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
             Invoke-Item $Path
 
-            $Message.Text += "`r`n- Mod files zipped & ready to go."
+            "- Mod files zipped & ready to go." | Log
             $BtnPublish.Text = 'Publish Mod'
         }
     }
@@ -325,6 +349,7 @@ if ($Mode -eq 'COPY') {
     $MsgBox.Controls.Add($BtnLaunchSKSESE)
     $MsgBox.Controls.Add($BtnLaunchSKSEVR)
     
+    "- [$Project - $OldVersion] has been built." | Log
     $MsgBox.ShowDialog() | Out-Null
     Exit
 }
@@ -355,6 +380,7 @@ if ($Mode -eq 'DISTRIBUTE') { # update script to every project
         Robocopy.exe "$PSScriptRoot" "$_" '!Update.ps1' /MT /NJS /NFL /NDL /NJH | Out-Null
     }
 }
+
 
 
 
