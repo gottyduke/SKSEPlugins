@@ -1,0 +1,16 @@
+{
+  "patches": [
+    {
+      "offset": 0,
+      "patch": "",
+      "validate": "",
+      "desc": "BaseLoc"
+    },
+    {
+      "offset": 399972,
+      "patch": "01",
+      "validate": "00",
+      "desc": "SKSEPlugin_Version"
+    }
+  ]
+}

@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
 
-$env:DKScriptVersion = '23309'
+$env:DKScriptVersion = '23310'
 $env:RebuildInvoke = $true
 $env:ScriptCulture = (Get-Culture).Name -eq 'zh-CN'
 
