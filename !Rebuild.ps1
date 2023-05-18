@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
 
-$env:DKScriptVersion = '22O17'
+$env:DKScriptVersion = '23309'
 $env:RebuildInvoke = $true
 $env:ScriptCulture = (Get-Culture).Name -eq 'zh-CN'
 
@@ -431,7 +431,7 @@ else {
 
 	$Invocation += '"'
 
-	$Batch = Get-ChildItem "$PSSciptRoot" -File | Where-Object {($_.Extension -eq '.cmd') -and ($_.BaseName.StartsWith('!_LAST_'))} | ForEach-Object {
+	$Batch = Get-ChildItem "$PSSciptRoot" -File | Where-Object { ($_.Extension -eq '.cmd') -and ($_.BaseName.StartsWith('!_LAST_')) } | ForEach-Object {
 		Remove-Item "$_" -Confirm:$false -Force -ErrorAction:SilentlyContinue | Out-Null
 	}
 
