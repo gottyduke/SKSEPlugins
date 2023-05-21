@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
 
-$env:DKScriptVersion = '23518'
+$env:DKScriptVersion = '23521'
 $env:RebuildInvoke = $true
 $env:ScriptCulture = (Get-Culture).Name -eq 'zh-CN'
 
@@ -140,15 +140,13 @@ if ($Bootstrap) {
 	$Signature = Get-AuthenticodeSignature "$PSScriptRoot\!Rebuild.ps1"
 	if ($Signature.Status -ne 'Valid') {
 		Write-Host "`t! Self signing updating..." -ForegroundColor Yellow -NoNewline
-		$scriptCert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Subject -eq 'CN=DKScriptSelfCert' }
-		if (!$scriptCert) {
-			$authenticode = New-SelfSignedCertificate -Subject 'DKScriptSelfCert' -CertStoreLocation Cert:\LocalMachine\My -Type CodeSigningCert
-			foreach ($store in @([System.Security.Cryptography.X509Certificates.StoreName]::Root, [System.Security.Cryptography.X509Certificates.StoreName]::TrustedPublisher)) {
-				$Cert = [System.Security.Cryptography.X509Certificates.X509Store]::new($store, [System.Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine)
-				$Cert.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
-				$Cert.Add($authenticode)
-				$Cert.Close()
-			}
+		Get-ChildItem Cert:\LocalMachine -Recurse | Where-Object { $_.Subject -eq 'CN=DKScriptSelfCert' } | Remove-Item -Force -ErrorAction:SilentlyContinue
+		$authenticode = New-SelfSignedCertificate -Subject 'DKScriptSelfCert' -CertStoreLocation Cert:\LocalMachine\My -Type CodeSigningCert
+		foreach ($store in @([System.Security.Cryptography.X509Certificates.StoreName]::Root, [System.Security.Cryptography.X509Certificates.StoreName]::TrustedPublisher)) {
+			$Cert = [System.Security.Cryptography.X509Certificates.X509Store]::new($store, [System.Security.Cryptography.X509Certificates.StoreLocation]::LocalMachine)
+			$Cert.Open([System.Security.Cryptography.X509Certificates.OpenFlags]::ReadWrite)
+			$Cert.Add($authenticode)
+			$Cert.Close()
 		}
 		$scriptCert = Get-ChildItem Cert:\LocalMachine\My | Where-Object { $_.Subject -eq 'CN=DKScriptSelfCert' }
 		@('!MakeNew.ps1', '!Rebuild.ps1', '!Update.ps1') | ForEach-Object {
@@ -157,7 +155,7 @@ if ($Bootstrap) {
 
 		$Signature = Get-AuthenticodeSignature "$PSScriptRoot/!Rebuild.ps1"
 		if ($Signature.Status -ne 'Valid') {
-			Write-Host "`r`t! Failed to complete self signing procecss!  " -ForegroundColor Red
+			Write-Host "`r`t! Failed to complete self signing process!  " -ForegroundColor Red
 			Exit
 		}
 		else {
@@ -391,8 +389,9 @@ $CMake = & cmake.exe -B $PSScriptRoot/Build -S $PSScriptRoot --preset=$($Runtime
 	$_
 }
 
-if ($CMake[-2] -ne '-- Generating done') {
+if ($CMake[-2] -notlike '*Generating done*') {
 	Write-Host "`tFailed generating solution!" -ForegroundColor Red
+	$CMake
 }
 else {
 	Write-Host "`tFinished generating solution!`n`n`tYou may open the skse64.sln and starting coding." -ForegroundColor Green
@@ -442,5 +441,3 @@ else {
 	Write-Host "`tTo rebuild with same configuration, use the generated batch file.`n`t* $Batch *" -ForegroundColor Green
 	Write-Host "`n`t!Rebuild will now exit." -ForegroundColor Green
 }
-
-
