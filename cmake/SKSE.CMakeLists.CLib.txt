@@ -28,7 +28,7 @@ set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CAC
 project(
 	CommonLibSSE
 	LANGUAGES CXX
-	VERSION 3.2.4
+	VERSION 3.7.0
 )
 
 include(GNUInstallDirs)
@@ -40,8 +40,9 @@ endif()
 
 # dependencies
 find_package(binary_io CONFIG REQUIRED)
-find_package(spdlog REQUIRED CONFIG)
-find_path(FAST_CPP_CSV_PARSER_INCLUDE_DIRS "fast-cpp-csv-parser/csv.h")
+find_package(fmt CONFIG REQUIRED)
+find_package(spdlog CONFIG REQUIRED)
+find_path(RAPIDCSV_INCLUDE_DIRS "rapidcsv.h")
 
 # source files
 execute_process(COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/!Update.ps1" "SOURCEGEN" "${PROJECT_VERSION}" "${CMAKE_CURRENT_BINARY_DIR}")
@@ -86,6 +87,7 @@ if (MSVC)
 			# disable warnings
 			/wd4005 # macro redefinition
 			/wd4061 # enumerator 'identifier' in switch of enum 'enumeration' is not explicitly handled by a case label
+			/wd4068 # unknown pragma
 			/wd4200 # nonstandard extension used : zero-sized array in struct/union
 			/wd4201 # nonstandard extension used : nameless struct/union
 			/wd4265 # 'type': class has virtual functions, but its non-trivial destructor is not virtual; instances of this class may not be destructed correctly
@@ -117,16 +119,11 @@ target_include_directories(
 		"$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
 )
 
-target_include_directories(
-	"${PROJECT_NAME}"
-	PRIVATE
-		${FAST_CPP_CSV_PARSER_INCLUDE_DIRS}
-)
-
 target_link_libraries(
 	"${PROJECT_NAME}"
 	PUBLIC
 		binary_io::binary_io
+		fmt::fmt
 		spdlog::spdlog
 		Version.lib
 )
