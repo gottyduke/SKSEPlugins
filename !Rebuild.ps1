@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
 
-$env:DKScriptVersion = '23521'
+$env:DKScriptVersion = '23626'
 $env:RebuildInvoke = $true
 $env:ScriptCulture = (Get-Culture).Name -eq 'zh-CN'
 
@@ -336,6 +336,7 @@ $Boiler = [IO.File]::ReadAllLines("$PSScriptRoot/cmake/SKSE.CMakeLists.txt")
 $CMakeLists = $Header + $Boiler + $CMakeLists
 $CMakeLists = $CMakeLists -replace '\sskse64', "`tSKSE64_$($Runtime.ToUpper())"
 [IO.File]::WriteAllLines("$PSScriptRoot/CMakeLists.txt", $CMakeLists)
+$ProjectVCPKG.dependencies = $ProjectVCPKG.dependencies | Sort-Object -Unique
 $ProjectVCPKG = $ProjectVCPKG | ConvertTo-Json -Depth 9
 [IO.File]::WriteAllText("$PSScriptRoot/vcpkg.json", $ProjectVCPKG)
 
@@ -400,25 +401,26 @@ else {
 	Invoke-Item "$PSScriptRoot/Build"
 
 	# @@Patch : Disable Visual Studio 17.6.0+ <BuildStlModules> using c++23 standard
-	$VSBuildVer = & "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe" -latest -property catalog_buildBranch
-	[single]$VSBuildVer = $VSBuildVer.Substring(1)
-	if ($VSBuildVer -ge 17.4) {
-
-		Write-Host "`n`tPatched project files for Visual Studio 17.6+ version, regarding c++23 std modules. `n`thttps://gitlab.kitware.com/cmake/cmake/-/issues/24922`n" -ForegroundColor Yellow
-
-		$VCXPROJS = Get-ChildItem "$PSScriptRoot/Build" *.vcxproj -Recurse
-		foreach ($vcxproj in $VCXPROJS) {
-			[xml]$vcx = Get-Content $vcxproj
-			$idg = $vcx.CreateElement("ItemDefinitionGroup", $vcx.Project.NamespaceURI)
-			$idg = $vcx.Project.AppendChild($idg)
-			$cl = $vcx.CreateElement("ClCompile", $idg.NamespaceURI)
-			$cl = $idg.AppendChild($cl)
-			$stl = $vcx.CreateElement("BuildStlModules", $cl.NamespaceURI)
-			$stl.InnerText = "false"
-			$stl = $cl.AppendChild($stl)
-			$vcx.Save($vcxproj.FullName)
-		}
+	$VSWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+	if (Test-Path $VSWhere -PathType Leaf) {
+		$VSBuildVer = & $VSWhere -latest -property catalog_buildBranch
+		[single]$VSBuildVer = $VSBuildVer.Substring(1)
+		if ($VSBuildVer -ge 17.4) {
+			Write-Host "`n`tPatched project files for Visual Studio 17.6+ version, regarding c++23 std modules. `n`thttps://gitlab.kitware.com/cmake/cmake/-/issues/24922`n" -ForegroundColor Yellow
 	
+			$VCXPROJS = Get-ChildItem "$PSScriptRoot/Build" *.vcxproj -Recurse
+			foreach ($vcxproj in $VCXPROJS) {
+				[xml]$vcx = Get-Content $vcxproj.FullName
+				$idg = $vcx.CreateElement("ItemDefinitionGroup", $vcx.Project.NamespaceURI)
+				$idg = $vcx.Project.AppendChild($idg)
+				$cl = $vcx.CreateElement("ClCompile", $idg.NamespaceURI)
+				$cl = $idg.AppendChild($cl)
+				$stl = $vcx.CreateElement("BuildStlModules", $cl.NamespaceURI)
+				$stl.InnerText = "false"
+				$stl = $cl.AppendChild($stl)
+				$vcx.Save($vcxproj.FullName)
+			}
+		}
 	}
 
 	# @@Compile

@@ -1,3 +1,4 @@
+status    Source          Target          Offset    Type    Score     DifferenceComplexityDebug
     140001022       140001022       0         loc     1         0         4         
     14000102D       14000102D       0         loc     1         0         4         
     140001038       140001038       0         loc     1         0         4         
