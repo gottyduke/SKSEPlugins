@@ -291,6 +291,28 @@ Copy-Item "$env:CommonLibSSEPath/CMakeLists.txt" "$env:CommonLibSSEPath/CMakeLis
 Copy-Item "$PSScriptRoot/cmake/SKSE.CMakeLists.CLib.txt" "$env:CommonLibSSEPath/CMakeLists.txt" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
 
 
+# @@Patch : Disable Visual Studio 17.6.0+ <BuildStlModules> using c++23 standard
+$VSBuildVer = 0.0
+$VSWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+if (Test-Path $VSWhere -PathType Leaf) {
+	$VSBuildVer = & $VSWhere -latest -property catalog_buildBranch
+	[single]$VSBuildVer = $VSBuildVer.Substring(1)
+}
+if ($VSBuildVer -ge 17.6) {
+	[xml]$stl = @"
+<?xml version="1.0" encoding="utf-8"?>
+<Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
+	<ItemDefinitionGroup>
+		<ClCompile>
+			<BuildStlModules>false</BuildStlModules>
+		</ClCompile>
+	</ItemDefinitionGroup>
+</Project>
+"@
+	$stl.Save("$PSScriptRoot/build_stl_modules.props")
+	$CMakeLists.Add((Normalize "set_property(TARGET CommonLibSSE PROPERTY VS_USER_PROPS `"$PSScriptRoot/build_stl_modules.props`")")) | Out-Null
+}
+
 # @@CMake Targets
 $AcceptedSubfolder = @('Library', 'Plugins')
 $ExcludedSubfolder = 'Template|CommonLib'
@@ -316,6 +338,11 @@ foreach ($subfolder in $AcceptedSubfolder) {
 			$CMakeLists.Add((Add-Subdirectory $TargetPath $TargetPath)) | Out-Null
 			$CMakeLists.Add((Normalize "fipch($TargetName $TargetPath)")) | Out-Null
 			$CMakeLists.Add((Normalize "define_external($TargetName)")) | Out-Null
+
+			# @@Temp fix
+			if ($VSBuildVer -ge 17.6) {
+				$CMakeLists.Add((Normalize "set_property(TARGET $TargetName PROPERTY VS_USER_PROPS `"$PSScriptRoot/build_stl_modules.props`")")) | Out-Null
+			}
 		}
 	}
 }
@@ -400,27 +427,8 @@ else {
 
 	Invoke-Item "$PSScriptRoot/Build"
 
-	# @@Patch : Disable Visual Studio 17.6.0+ <BuildStlModules> using c++23 standard
-	$VSWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-	if (Test-Path $VSWhere -PathType Leaf) {
-		$VSBuildVer = & $VSWhere -latest -property catalog_buildBranch
-		[single]$VSBuildVer = $VSBuildVer.Substring(1)
-		if ($VSBuildVer -ge 17.4) {
-			Write-Host "`n`tPatched project files for Visual Studio 17.6+ version, regarding c++23 std modules. `n`thttps://gitlab.kitware.com/cmake/cmake/-/issues/24922`n" -ForegroundColor Yellow
-	
-			$VCXPROJS = Get-ChildItem "$PSScriptRoot/Build" *.vcxproj -Recurse
-			foreach ($vcxproj in $VCXPROJS) {
-				[xml]$vcx = Get-Content $vcxproj.FullName
-				$idg = $vcx.CreateElement("ItemDefinitionGroup", $vcx.Project.NamespaceURI)
-				$idg = $vcx.Project.AppendChild($idg)
-				$cl = $vcx.CreateElement("ClCompile", $idg.NamespaceURI)
-				$cl = $idg.AppendChild($cl)
-				$stl = $vcx.CreateElement("BuildStlModules", $cl.NamespaceURI)
-				$stl.InnerText = "false"
-				$stl = $cl.AppendChild($stl)
-				$vcx.Save($vcxproj.FullName)
-			}
-		}
+	if ($VSBuildVer -ge 17.6) {
+		Write-Host "`n`tPatched project files for Visual Studio 17.6+ version, regarding c++23 std modules. `n`thttps://gitlab.kitware.com/cmake/cmake/-/issues/24922`n" -ForegroundColor Yellow
 	}
 
 	# @@Compile
