@@ -6,11 +6,12 @@
   "homepage": "https://github.com/gottyduke/SKSEPlugins",
   "license": "MIT",
   "supports": "windows & x64",
+  "builtin-baseline": "ee12231b20c95013c6638d845d04c91559a1d1ff",
   "dependencies": [
     "catch2",
+    "directxtk",
     "fmt",
     "rapidcsv",
-    "rsm-binary-io",
     "spdlog",
     "xbyak"
   ]

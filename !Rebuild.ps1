@@ -15,7 +15,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $PSDefaultParameterValues['Out-File:Encoding'] = 'utf8'
 
-$env:DKScriptVersion = '23626'
+$env:DKScriptVersion = '26828'
 $env:RebuildInvoke = $true
 $env:ScriptCulture = (Get-Culture).Name -eq 'zh-CN'
 
@@ -48,24 +48,46 @@ if ($Bootstrap) {
 			[string]$RepoName,
 			[string]$Token,
 			[string]$Path,
-			[string]$RemoteUrl
+			[string]$RemoteUrl,
+			[string]$Branch,
+			[switch]$Submodules
 		)
 		
 		process {
-			if (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) {
+			$Installed = (Test-Path "$PSScriptRoot/$Path/$Token" -PathType Leaf) -and (Test-Path "$PSScriptRoot/$Path/.git")
+			$Origin = $null
+			if ($Installed) {
+				$Origin = & git -C "$PSScriptRoot/$Path" remote get-url origin 2>$null
+			}
+			$Expected = $RemoteUrl.TrimEnd('/') -replace '\.git$', ''
+		
+			if ($Installed -and $Origin -and (($Origin.TrimEnd('/') -replace '\.git$', '') -ne $Expected)) {
+				Write-Host "`n`t! $RepoName points at a different remote, leaving it alone" -ForegroundColor Yellow
+				Write-Host "`t`t# Found:    $Origin"
+				Write-Host "`t`t# Expected: $RemoteUrl"
+				Write-Host "`t`t# Delete [$Path] and re-run -Bootstrap if that is not intentional."
+			}
+			elseif ($Installed) {
 				Write-Host "`n`t* Located local $RepoName   " -ForegroundColor Green
 			}
 			else {
 				Remove-Item "$PSScriptRoot/$Path" -Recurse -Force -Confirm:$false -ErrorAction:SilentlyContinue
 				Write-Host "`n`t- Bootstrapping $RepoName..." -ForegroundColor Yellow -NoNewline
-				& git clone $RemoteUrl $Path -q
+				$CloneArgs = @('clone', $RemoteUrl, $Path, '-q')
+				if ($Branch) {
+					$CloneArgs += @('-b', $Branch)
+				}
+				if ($Submodules) {
+					$CloneArgs += '--recurse-submodules'
+				}
+				& git $CloneArgs
 				Write-Host "`r`t- Installed $RepoName               " -ForegroundColor Green
 			}
 			
 			$CurrentEnv = $ExecutionContext.SessionState.Path.GetUnresolvedProviderPathFromPSPath("$PSScriptRoot/$Path")
 			Write-Host "`t`t- Mapping path, please wait..." -NoNewline
 			Start-Job {
-				if ($RepoName -notlike '*CommonLib*') {
+				if ($using:RepoName -notlike '*CommonLib*') {
 					Push-Location $using:CurrentEnv
 					& git checkout -f master -q
 					Pop-Location
@@ -196,8 +218,7 @@ if ($Bootstrap) {
 		& $PSScriptRoot/vcpkg/vcpkg.exe integrate install | Out-Null
 	}
 
-	# CommonLibSSEPath
-	Initialize-Repo 'CommonLibSSEPath' 'CommonLibSSE-NG' 'CMakeLists.txt' 'Library/CommonLibSSE-NG' 'https://github.com/CharmedBaryon/CommonLibSSE-NG'
+	Initialize-Repo 'CommonLibSSEPath' 'CommonLibSSE-NG' 'CMakeLists.txt' 'Library/CommonLibSSE-NG' 'https://github.com/alandtse/CommonLibSSE-NG' -Branch 'ng' -Submodules
 	$Result = [Microsoft.VisualBasic.Interaction]::MsgBox("Enable custom CLib support?`n`nThis is for people who maintain their own modification of CommonLibSSE-NG", 'YesNo,MsgBoxSetForeground,Question', 'Custom CLib support') 
 	while ($Result -eq 6) {
 		$CustomCLibDir = New-Object System.Windows.Forms.FolderBrowserDialog -Property @{

@@ -2,11 +2,15 @@ cmake_minimum_required(VERSION 3.21)
 
 # singleton target across multiple projects
 if(TARGET CommonLibSSE)
-	return() 
+	return()
 endif()
 
 # options if not defined
+option(REX_OPTION_INI "Enables ini config support for REX." OFF)
+option(REX_OPTION_JSON "Enables json config support for REX." OFF)
+option(REX_OPTION_TOML "Enables toml config support for REX." OFF)
 option(SKSE_SUPPORT_XBYAK "Enables trampoline support for Xbyak." ON)
+option(SKSE_SUPPORT_PATCH_SAFETY "Validate Trampoline::write_branch patch sites land on instruction boundaries before writing (vendors hde64); logs and still writes on failure, never blocks." ON)
 option(ENABLE_SKYRIM_SE "Enable support for Skyrim SE in the dynamic runtime feature." ON)
 option(ENABLE_SKYRIM_AE "Enable support for Skyrim AE in the dynamic runtime feature." ON)
 option(ENABLE_SKYRIM_VR "Enable support for Skyrim VR in the dynamic runtime feature." ON)
@@ -19,8 +23,6 @@ endif()
 # standards & flags
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION ON)
-set(CMAKE_INTERPROCEDURAL_OPTIMIZATION_DEBUF OFF)
 set_property(GLOBAL PROPERTY USE_FOLDERS ON)
 set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CACHE FILEPATH "")
 
@@ -28,9 +30,10 @@ set(CMAKE_TOOLCHAIN_FILE "$ENV{VCPKG_ROOT}/scripts/buildsystems/vcpkg.cmake" CAC
 project(
 	CommonLibSSE
 	LANGUAGES CXX
-	VERSION 3.7.0
+	VERSION 6.7.1
 )
 
+include(CheckIPOSupported)
 include(GNUInstallDirs)
 
 # out-of-source builds only
@@ -38,19 +41,43 @@ if(${PROJECT_SOURCE_DIR} STREQUAL ${PROJECT_BINARY_DIR})
 	message(FATAL_ERROR "In-source builds are not allowed.")
 endif()
 
+if(ENABLE_SKYRIM_VR AND NOT EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/extern/openvr/headers/openvr.h")
+	message(FATAL_ERROR "CommonLibSSE's openvr submodule is missing. Run:\n\tgit -C \"${CMAKE_CURRENT_SOURCE_DIR}\" submodule update --init --recursive")
+endif()
+
 # dependencies
-find_package(binary_io CONFIG REQUIRED)
-find_package(fmt CONFIG REQUIRED)
 find_package(spdlog CONFIG REQUIRED)
+find_package(directxtk CONFIG REQUIRED)
 find_path(RAPIDCSV_INCLUDE_DIRS "rapidcsv.h")
 
-# source files
+if(SKSE_SUPPORT_PATCH_SAFETY)
+	enable_language(C)
+	include(FetchContent)
+	FetchContent_Declare(
+		hde64
+		GIT_REPOSITORY https://github.com/TsudaKageyu/minhook.git
+		GIT_TAG v1.3.4
+		GIT_SHALLOW TRUE
+		SOURCE_SUBDIR src/hde
+	)
+	FetchContent_MakeAvailable(hde64)
+endif()
+
 execute_process(COMMAND powershell -ExecutionPolicy Bypass -File "${CMAKE_CURRENT_SOURCE_DIR}/!Update.ps1" "SOURCEGEN" "${PROJECT_VERSION}" "${CMAKE_CURRENT_BINARY_DIR}")
 include(${CMAKE_CURRENT_BINARY_DIR}/sourcelist.cmake)
 source_group(
 	TREE "${CMAKE_CURRENT_SOURCE_DIR}"
 	FILES ${SOURCES}
 )
+
+option(COMMONLIB_ENABLE_IPO "Enable interprocedural (link-time) optimization for Release builds" ON)
+
+if(COMMONLIB_ENABLE_IPO)
+	check_ipo_supported(RESULT USE_IPO OUTPUT IPO_OUTPUT)
+	if(USE_IPO)
+		set(CMAKE_INTERPROCEDURAL_OPTIMIZATION "$<$<CONFIG:RELEASE>:ON>")
+	endif()
+endif()
 
 add_library(
 	"${PROJECT_NAME}"
@@ -67,11 +94,29 @@ target_compile_definitions(
 	PUBLIC
 		WINVER=0x0601	# windows 7, minimum supported version by skyrim special edition
 		_WIN32_WINNT=0x0601
+		"$<$<BOOL:${REX_OPTION_INI}>:REX_OPTION_INI=1>"
+		"$<$<BOOL:${REX_OPTION_JSON}>:REX_OPTION_JSON=1>"
+		"$<$<BOOL:${REX_OPTION_TOML}>:REX_OPTION_TOML=1>"
 		"$<$<BOOL:${SKSE_SUPPORT_XBYAK}>:SKSE_SUPPORT_XBYAK=1>"
+		"$<$<BOOL:${SKSE_SUPPORT_PATCH_SAFETY}>:SKSE_SUPPORT_PATCH_SAFETY=1>"
 		"$<$<BOOL:${ENABLE_SKYRIM_SE}>:ENABLE_SKYRIM_SE=1>"
 		"$<$<BOOL:${ENABLE_SKYRIM_AE}>:ENABLE_SKYRIM_AE=1>"
 		"$<$<BOOL:${ENABLE_SKYRIM_VR}>:ENABLE_SKYRIM_VR=1>"
-		HAS_SKYRIM_MULTI_TARGETING=1
+		"$<$<AND:$<BOOL:${ENABLE_SKYRIM_SE}>,$<BOOL:${ENABLE_SKYRIM_AE}>>:HAS_SKYRIM_MULTI_TARGETING=1>"
+		"$<$<AND:$<BOOL:${ENABLE_SKYRIM_SE}>,$<BOOL:${ENABLE_SKYRIM_VR}>>:HAS_SKYRIM_MULTI_TARGETING=1>"
+		"$<$<AND:$<BOOL:${ENABLE_SKYRIM_AE}>,$<BOOL:${ENABLE_SKYRIM_VR}>>:HAS_SKYRIM_MULTI_TARGETING=1>"
+)
+
+target_compile_definitions(
+	"${PROJECT_NAME}"
+	PRIVATE
+		"COMMONLIB_VERSION=\"${PROJECT_VERSION}\""
+)
+
+target_compile_features(
+	"${PROJECT_NAME}"
+	PUBLIC
+		cxx_std_23
 )
 
 if (MSVC)
@@ -81,10 +126,14 @@ if (MSVC)
 			/bigobj # support large object file format
 			/utf-8  # assume UTF-8 sources even without a BOM
 
+			"$<$<CONFIG:Debug>:/Zo>"
+			/Zc:preprocessor # Enable conforming preprocessor (required for STATIC_ASSERT_SIZE variadic macro)
+
 			# warnings -> errors
 			/we4715	# 'function' : not all control paths return a value
 
 			# disable warnings
+			"$<$<CONFIG:Debug>:/wd4702>" # unreachable code: debug builds don't optimize away compile-time conditionals
 			/wd4005 # macro redefinition
 			/wd4061 # enumerator 'identifier' in switch of enum 'enumeration' is not explicitly handled by a case label
 			/wd4068 # unknown pragma
@@ -103,6 +152,7 @@ if (MSVC)
 			/wd4710 # 'function' : function not inlined
 			/wd4711 # function 'function' selected for inline expansion
 			/wd4820 # 'bytes' bytes padding added after construct 'member_name'
+			/wd4996 # 'deprecated function': required due to Microsoft STL itself using its own deprecated functions
 			/wd5026 # 'type': move constructor was implicitly defined as deleted
 			/wd5027 # 'type': move assignment operator was implicitly defined as deleted
 			/wd5045 # Compiler will insert Spectre mitigation for memory load if /Qspectre switch specified
@@ -110,22 +160,63 @@ if (MSVC)
 			/wd5204 # 'type-name': class has virtual functions, but its trivial destructor is not virtual; instances of objects derived from this class may not be destructed correctly
 			/wd5220 # 'member': a non-static data member with a volatile qualified type no longer implies that compiler generated copy / move constructors and copy / move assignment operators are not trivial
 	)
+
+	target_compile_options(
+		"${PROJECT_NAME}"
+		PRIVATE
+			/WX-
+	)
+
+	target_link_options(
+		"${PROJECT_NAME}"
+		PUBLIC
+			# Generate complete PDB with all type information for reverse engineering
+			"$<$<CONFIG:Debug>:/DEBUG:FULL>"
+	)
 endif()
 
+set(OPENVR_INCLUDE_DIR ${CMAKE_CURRENT_SOURCE_DIR}/extern/openvr/headers)
+set(OPENVR_LIB_DIR ${CMAKE_CURRENT_SOURCE_DIR}/extern/openvr/lib/win64)
 target_include_directories(
 	"${PROJECT_NAME}"
 	PUBLIC
 		"$<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>"
 		"$<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>"
+		"$<BUILD_INTERFACE:${OPENVR_INCLUDE_DIR}>"
 )
+
+target_include_directories(
+	"${PROJECT_NAME}"
+	PRIVATE
+		${spdlog_INCLUDE_DIRS}
+		${RAPIDCSV_INCLUDE_DIRS}
+)
+
+if(SKSE_SUPPORT_PATCH_SAFETY)
+	target_sources("${PROJECT_NAME}" PRIVATE "${hde64_SOURCE_DIR}/src/hde/hde64.c")
+	target_include_directories("${PROJECT_NAME}" PRIVATE "${hde64_SOURCE_DIR}/src/hde")
+	set_source_files_properties(
+		"${hde64_SOURCE_DIR}/src/hde/hde64.c" PROPERTIES
+		LANGUAGE C
+		SKIP_PRECOMPILE_HEADERS ON
+		COMPILE_OPTIONS "$<$<CXX_COMPILER_ID:MSVC>:/WX->"
+	)
+endif()
 
 target_link_libraries(
 	"${PROJECT_NAME}"
 	PUBLIC
-		binary_io::binary_io
-		fmt::fmt
 		spdlog::spdlog
-		Version.lib
+		Microsoft::DirectXTK
+		advapi32.lib
+		bcrypt.lib
+		D3D11.lib
+		d3dcompiler.lib
+		dbghelp.lib
+		DXGI.lib
+		ole32.lib
+		version.lib
+		"$<$<BOOL:${ENABLE_SKYRIM_VR}>:${OPENVR_LIB_DIR}/openvr_api.lib>"
 )
 
 target_precompile_headers(
@@ -160,6 +251,7 @@ install(
 	DIRECTORY
 		"include/RE"
 		"include/REL"
+		"include/REX"
 		"include/SKSE"
 	DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}"
 )

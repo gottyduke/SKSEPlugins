@@ -38,7 +38,8 @@ New-Item -Type dir $Path -Force | Out-Null
 # update
 if (Test-Path "$env:SKSETemplatePath/CMakeLists.txt" -PathType Leaf) {
     Write-Host "`tFound SKSETemplate project" -ForegroundColor Green
-} else {
+}
+else {
     Write-Host "`t! Missing Template project! Downloading..." -ForegroundColor Red -NoNewline
     Remove-Item "$PSScriptRoot/Plugins/Template" -Recurse -Force -Confirm:$false -ErrorAction Ignore
     & git clone https://github.com/gottyduke/Template "$PSScriptRoot/Plugins/Template" -q
@@ -63,12 +64,14 @@ if ($Description) {
 if ($AddDependencies) {
     Write-Host "`tAdditional vcpkg dependency enabled" -ForegroundColor Yellow
     foreach ($dependency in $AddDependencies) {
-        if ($dependency.Contains('[')) { # vcpkg-features
+        if ($dependency.Contains('[')) {
+            # vcpkg-features
             $Json.'dependencies' += [PSCustomObject]@{
-                'name' = $dependency.Substring(0, $dependency.IndexOf('['))
+                'name'     = $dependency.Substring(0, $dependency.IndexOf('['))
                 'features' = $dependency.Substring($dependency.IndexOf('[') + 1).Replace(']', '').Split(',').Trim()
             }
-        } else {
+        }
+        else {
             $Json.'dependencies' += $dependency
             $Pakcages += $dependency
         }

@@ -37,18 +37,6 @@ endmacro()
 macro(define_external target_project)
 get_target_property(target_type ${target_project} TYPE)
 if(NOT "${target_type}" STREQUAL "INTERFACE_LIBRARY")
-	target_compile_definitions(
-		${target_project}
-		PUBLIC
-			WINVER=0x0601	# windows 7, minimum supported version by skyrim special edition
-			_WIN32_WINNT=0x0601
-			"$<$<BOOL:${SKSE_SUPPORT_XBYAK}>:SKSE_SUPPORT_XBYAK=1>"
-			"$<$<BOOL:${ENABLE_SKYRIM_SE}>:ENABLE_SKYRIM_SE=1>"
-			"$<$<BOOL:${ENABLE_SKYRIM_AE}>:ENABLE_SKYRIM_AE=1>"
-			"$<$<BOOL:${ENABLE_SKYRIM_VR}>:ENABLE_SKYRIM_VR=1>"
-			HAS_SKYRIM_MULTI_TARGETING=1
-	)
-
 	target_compile_options(
 		${target_project}
 		PRIVATE
@@ -60,7 +48,7 @@ endmacro()
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/lib")
 set(CMAKE_RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin")
-set(BUILD_TESTS "Enable building of the unit tests." OFF)
+set(BUILD_TESTS OFF)
 
 add_compile_options(
 	/MP

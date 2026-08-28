@@ -109,6 +109,7 @@ Refresh MO2(`F5`) and start debugging! Or you can deploy straight into game's da
 <h2 align="center">VCPKG</h2>
 
 `!Rebuild` auto gathers vcpkg dependencies from sub projects and build them if needed.  
+If vcpkg reports an unknown baseline, update your `VCPKG_ROOT` checkout (`git pull` + `bootstrap-vcpkg.bat`).  
 
 <h2 align="center">Add/Remove files</h2>
 
@@ -116,8 +117,8 @@ Supports **directly** adding/removing files in VS by right clicking `Add New Fil
 
 <h2 align="center">CommonLib</h2>
 
-`!Rebuild` builds with [default CommonLibSSE-NG](https://github.com/CharmedBaryon/CommonLibSSE-NG). To use a custom CommonLib, then append the switch `-c` or `-custom` to the `!Rebuild` command. Custom CommonLib has to be prepared in `bootstrap` process first!  
-However, `!Rebuild` uses custom pregenerated `CMakeLists.txt` in place of the default one came with CommonLibSSE.
+`!Rebuild` builds with [CommonLibSSE-NG](https://github.com/alandtse/CommonLibSSE-NG) (branch `ng`), which is the maintained fork and the one carrying Address Library format 5 / AE 1.7.99 support. `bootstrap` clones it with `--recurse-submodules`, as it vendors openvr as a submodule; if you cloned it by hand, run `git submodule update --init --recursive` in it or the VR build will fail.  
+To use a custom CommonLib, append the switch `-c` or `-custom` to the `!Rebuild` command. Custom CommonLib has to be prepared in `bootstrap` process first!  
 
 <h2 align="center">DKUtil</h2>
 
