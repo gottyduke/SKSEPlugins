@@ -39,7 +39,7 @@ function Resolve-Files {
                     if (!$env:RebuildInvoke) {
                         Write-Host "`t`t<$_>"
                     }
-                    $_generated.Add("`n`t`"$($_.Substring(2) -replace '\\', '/')`"") | Out-Null
+                    $_generated.Add("`n`t`"$($_ -replace '^\.[\\/]', '' -replace '\\', '/')`"") | Out-Null
                 }
             }               
             
@@ -50,7 +50,7 @@ function Resolve-Files {
                 if (!$env:RebuildInvoke) {
                     Write-Host "`t`t<$_>"
                 }
-                $_generated.Add("`n`t`"$($_.Substring(2) -replace '\\', '/')`"") | Out-Null
+                $_generated.Add("`n`t`"$($_ -replace '^\.[\\/]', '' -replace '\\', '/')`"") | Out-Null
             }
         }
         finally {

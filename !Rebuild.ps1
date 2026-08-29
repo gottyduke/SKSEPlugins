@@ -313,14 +313,7 @@ Copy-Item "$PSScriptRoot/cmake/SKSE.CMakeLists.CLib.txt" "$env:CommonLibSSEPath/
 
 
 # @@Patch : Disable Visual Studio 17.6.0+ <BuildStlModules> using c++23 standard
-$VSBuildVer = 0.0
-$VSWhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
-if (Test-Path $VSWhere -PathType Leaf) {
-	$VSBuildVer = & $VSWhere -latest -property catalog_buildBranch
-	[single]$VSBuildVer = $VSBuildVer.Substring(1)
-}
-if ($VSBuildVer -ge 17.6) {
-	[xml]$stl = @"
+[xml]$stl = @"
 <?xml version="1.0" encoding="utf-8"?>
 <Project ToolsVersion="4.0" xmlns="http://schemas.microsoft.com/developer/msbuild/2003">
 	<ItemDefinitionGroup>
@@ -330,9 +323,8 @@ if ($VSBuildVer -ge 17.6) {
 	</ItemDefinitionGroup>
 </Project>
 "@
-	$stl.Save("$PSScriptRoot/build_stl_modules.props")
-	$CMakeLists.Add((Normalize "set_property(TARGET CommonLibSSE PROPERTY VS_USER_PROPS `"$PSScriptRoot/build_stl_modules.props`")")) | Out-Null
-}
+$stl.Save("$PSScriptRoot/build_stl_modules.props")
+$CMakeLists.Add((Normalize "set_property(TARGET CommonLibSSE PROPERTY VS_USER_PROPS `"$PSScriptRoot/build_stl_modules.props`")")) | Out-Null
 
 # @@CMake Targets
 $AcceptedSubfolder = @('Library', 'Plugins')
@@ -360,10 +352,7 @@ foreach ($subfolder in $AcceptedSubfolder) {
 			$CMakeLists.Add((Normalize "fipch($TargetName $TargetPath)")) | Out-Null
 			$CMakeLists.Add((Normalize "define_external($TargetName)")) | Out-Null
 
-			# @@Temp fix
-			if ($VSBuildVer -ge 17.6) {
-				$CMakeLists.Add((Normalize "set_property(TARGET $TargetName PROPERTY VS_USER_PROPS `"$PSScriptRoot/build_stl_modules.props`")")) | Out-Null
-			}
+			$CMakeLists.Add((Normalize "set_property(TARGET $TargetName PROPERTY VS_USER_PROPS `"$PSScriptRoot/build_stl_modules.props`")")) | Out-Null
 		}
 	}
 }
@@ -410,7 +399,7 @@ Remove-Item "$PSScriptRoot/Build" -Recurse -Force -Confirm:$false -ErrorAction:I
 Write-Host "`tCleaned build folder"
 
 $Arguments = @(
-	'-Wno-dev'
+	'-Wno-author'
 )
 foreach ($enabledDebugger in $EnableDebugger) {
 	$Arguments += "-D$($enabledDebugger.ToUpper())_DEBUG_BUILD:BOOL=1"
@@ -447,10 +436,6 @@ else {
 	Write-Host "`tFinished generating solution!`n`n`tYou may open the skse64.sln and starting coding." -ForegroundColor Green
 
 	Invoke-Item "$PSScriptRoot/Build"
-
-	if ($VSBuildVer -ge 17.6) {
-		Write-Host "`n`tPatched project files for Visual Studio 17.6+ version, regarding c++23 std modules. `n`thttps://gitlab.kitware.com/cmake/cmake/-/issues/24922`n" -ForegroundColor Yellow
-	}
 
 	# @@Compile
 	if (!$NoPrebuild) {
