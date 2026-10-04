@@ -129,8 +129,14 @@ if ($Mode -eq 'COPY') {
         "- Binary files copied" | Log
 
         # pdb
-        Copy-Item "$Path/$Project.pdb" "$Data/SKSE/Plugins/$Project.pdb" -Force
-        "- PDB files copied" | Log
+        if (Test-Path "$Path/$Project.pdb" -PathType Leaf) {
+            Copy-Item "$Path/$Project.pdb" "$Data/SKSE/Plugins/$Project.pdb" -Force
+            "- PDB files copied" | Log
+        }
+        else {
+            Remove-Item "$Data/SKSE/Plugins/$Project.pdb" -Force -Confirm:$false -ErrorAction:SilentlyContinue | Out-Null
+            "- PDB files skipped (not found)" | Log
+        }
 
         # configs
         Get-ChildItem $PSScriptRoot | Where-Object {
