@@ -356,6 +356,12 @@ foreach ($subfolder in $AcceptedSubfolder) {
 		}
 	}
 }
+foreach ($external in @($env:DKUtilPath)) {
+	if ($external -and (Test-Path "$external/vcpkg.json" -PathType Leaf)) {
+		$vcpkg = [IO.File]::ReadAllText("$external/vcpkg.json") | ConvertFrom-Json
+		$ProjectVCPKG.dependencies += $vcpkg.'dependencies'
+	}
+}
 $Deps = @()
 foreach ($dep in $ProjectVCPKG.dependencies) {
 	$tmp = $dep
